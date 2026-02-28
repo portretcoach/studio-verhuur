@@ -13,6 +13,10 @@ const STORAGE_KEYS = {
 // Google Calendar Sync URL (Apps Script Web App)
 const CALENDAR_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzZFjfuhYaeazpYi9ALgdFsFmedwTPpAg53oPnW-s3h_yqWSX5XTRMreIoqZrG0JzYUSw/exec';
 
+// Calendly Sync URL (Apps Script Web App)
+// Vul hier de URL in van je Calendly Apps Script (zie calendly-sync.gs voor setup instructies)
+const CALENDLY_SYNC_URL = '';
+
 const DAYS_NL = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
 const DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 const MONTHS_NL = [
@@ -180,18 +184,31 @@ function applyVasteBezetting() {
 // ============================================
 // 1d. CALENDLY BESCHIKBAARHEID (fotoshoot data → oranje)
 // ============================================
-function applyCalendlyBeschikbaarheid() {
-    // Beschikbare fotoshoot-data van Calendly (laatst bijgewerkt: 27 feb 2026)
-    const calendlyDates = [
-        '2026-03-07', '2026-03-16', '2026-03-29', '2026-03-30',
-        '2026-04-06', '2026-04-08', '2026-04-12', '2026-04-13',
-        '2026-04-28', '2026-04-29',
-        '2026-05-04', '2026-05-11', '2026-05-12', '2026-05-13', '2026-05-25'
-    ];
 
+// Fallback hardcoded datums (worden alleen gebruikt als de API niet geconfigureerd is)
+const CALENDLY_FALLBACK_DATES = [
+    '2026-03-07', '2026-03-16', '2026-03-29', '2026-03-30',
+    '2026-04-06', '2026-04-08', '2026-04-12', '2026-04-13',
+    '2026-04-28', '2026-04-29',
+    '2026-05-04', '2026-05-11', '2026-05-12', '2026-05-13', '2026-05-25'
+];
+
+// Pas Calendly datums toe op de kalender (oranje/check status)
+function applyCalendlyDates(calendlyDates) {
     let avail = loadMap(STORAGE_KEYS.availability);
     let changed = false;
 
+    // Verwijder oude Calendly entries die niet meer in de lijst staan
+    const calendlySet = new Set(calendlyDates);
+    for (const dateStr in avail) {
+        if (avail[dateStr].note && avail[dateStr].note.startsWith('Calendly') && !calendlySet.has(dateStr)) {
+            // Datum is niet meer beschikbaar in Calendly → verwijder
+            delete avail[dateStr];
+            changed = true;
+        }
+    }
+
+    // Voeg nieuwe Calendly datums toe
     calendlyDates.forEach(dateStr => {
         const existing = avail[dateStr];
         // Sla over als er al een boeking is
@@ -201,16 +218,63 @@ function applyCalendlyBeschikbaarheid() {
         // Sla over als admin handmatig iets anders heeft gezet
         if (existing && existing.note && !existing.note.startsWith('Calendly')) return;
 
-        avail[dateStr] = {
-            status: 'check',
-            note: 'Calendly fotoshoot beschikbaar'
-        };
-        changed = true;
+        // Alleen toepassen als er nog geen Calendly entry staat of als het nieuw is
+        if (!existing || existing.note?.startsWith('Calendly') || existing.status === 'beschikbaar' || !existing.status) {
+            avail[dateStr] = {
+                status: 'check',
+                note: 'Calendly fotoshoot beschikbaar'
+            };
+            changed = true;
+        }
     });
 
     if (changed) {
         save(STORAGE_KEYS.availability, avail);
         availability = avail;
+        renderCalendar();
+    }
+
+    return changed;
+}
+
+// Synchroniseer met Calendly via Apps Script API
+async function syncCalendly() {
+    // Als er geen URL geconfigureerd is, gebruik fallback datums
+    if (!CALENDLY_SYNC_URL) {
+        console.log('Calendly sync: geen URL geconfigureerd, gebruik fallback datums');
+        applyCalendlyDates(CALENDLY_FALLBACK_DATES);
+        return;
+    }
+
+    try {
+        const response = await fetch(CALENDLY_SYNC_URL);
+        const data = await response.json();
+
+        if (!data.success || !data.dates) {
+            console.warn('Calendly sync: fout ontvangen', data.error || data);
+            // Bij een fout, gebruik fallback datums
+            applyCalendlyDates(CALENDLY_FALLBACK_DATES);
+            return;
+        }
+
+        // Pas de live Calendly datums toe
+        const changed = applyCalendlyDates(data.dates);
+
+        console.log(
+            'Calendly sync voltooid:',
+            data.count, 'beschikbare datums,',
+            'event types:', (data.eventTypes || []).join(', '),
+            'laatst gesynchroniseerd:', data.lastSync
+        );
+
+        if (changed) {
+            showToast('Calendly gesynchroniseerd ✓');
+        }
+
+    } catch (err) {
+        console.error('Calendly sync fout:', err);
+        // Bij een netwerk/fetch fout, gebruik fallback datums
+        applyCalendlyDates(CALENDLY_FALLBACK_DATES);
     }
 }
 
@@ -351,8 +415,8 @@ function startApp() {
 
     // Vaste bezetting toepassen (donderdagen/vrijdagen)
     applyVasteBezetting();
-    // Calendly beschikbaarheid toepassen (oranje)
-    applyCalendlyBeschikbaarheid();
+    // Calendly beschikbaarheid synchroniseren (oranje — via API of fallback)
+    syncCalendly();
     // Automatisch synchroniseren met Google Calendar
     syncGoogleCalendar();
 }
@@ -923,85 +987,6 @@ function createStrippenkaart(e) {
     document.getElementById('card-modal').classList.add('hidden');
     renderStrippenkaarten();
     showToast(`Strippenkaart aangemaakt voor ${user.naam}`, 'success');
-}
-
-// ============================================
-// 10. VASTE HUUR
-// ============================================
-function renderVasteHuur() {
-    const container = document.getElementById('tenants-container');
-    if (!container) return;
-    container.innerHTML = '';
-
-    if (vasteHuur.length === 0) {
-        container.innerHTML = `<div class="empty-state"><p>Nog geen vaste huurders</p><span>Voeg een vaste huurder toe</span></div>`;
-        return;
-    }
-
-    vasteHuur.forEach(tenant => {
-        const el = document.createElement('div');
-        el.className = 'tenant-card';
-        el.innerHTML = `
-            <div class="tenant-card-header">
-                <h4>${tenant.naam}</h4>
-                <span class="tenant-status ${tenant.actief ? 'active' : 'inactive'}">
-                    ${tenant.actief ? 'Actief' : 'Inactief'}
-                </span>
-            </div>
-            <div class="tenant-detail"><strong>E-mail:</strong> ${tenant.email}</div>
-            <div class="tenant-detail"><strong>Dag:</strong> ${tenant.vasteDag}</div>
-            <div class="tenant-detail"><strong>Bedrag:</strong> &euro;${parseFloat(tenant.maandbedrag).toFixed(2)} /mnd</div>
-            <div class="tenant-detail"><strong>Sinds:</strong> ${tenant.startDatum}</div>
-            <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-                <button class="btn-success" data-toggle-tenant="${tenant.id}">
-                    ${tenant.actief ? 'Deactiveren' : 'Activeren'}
-                </button>
-                <button class="btn-danger" data-delete-tenant="${tenant.id}">Verwijderen</button>
-            </div>
-        `;
-        container.appendChild(el);
-    });
-
-    container.querySelectorAll('[data-toggle-tenant]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const t = vasteHuur.find(v => v.id === btn.dataset.toggleTenant);
-            if (t) {
-                t.actief = !t.actief;
-                save(STORAGE_KEYS.vasteHuur, vasteHuur);
-                renderVasteHuur();
-            }
-        });
-    });
-
-    container.querySelectorAll('[data-delete-tenant]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            if (confirm('Vaste huurder verwijderen?')) {
-                vasteHuur = vasteHuur.filter(v => v.id !== btn.dataset.deleteTenant);
-                save(STORAGE_KEYS.vasteHuur, vasteHuur);
-                renderVasteHuur();
-                showToast('Vaste huurder verwijderd');
-            }
-        });
-    });
-}
-
-function createTenant(e) {
-    e.preventDefault();
-    const tenant = {
-        id: genId(),
-        naam: document.getElementById('tenant-name').value.trim(),
-        email: document.getElementById('tenant-email').value.trim(),
-        vasteDag: document.getElementById('tenant-day').value,
-        maandbedrag: document.getElementById('tenant-price').value,
-        startDatum: document.getElementById('tenant-start').value,
-        actief: true
-    };
-    vasteHuur.push(tenant);
-    save(STORAGE_KEYS.vasteHuur, vasteHuur);
-    document.getElementById('tenant-modal').classList.add('hidden');
-    document.getElementById('tenant-form').reset();
-    renderVasteHuur();
-    showToast(`${tenant.naam} toegevoegd als vaste huurder`, 'success');
 }
 
 // ============================================
