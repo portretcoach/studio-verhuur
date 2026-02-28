@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Studio Verhuur Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" class="login-screen">
+        <div class="login-card">
+            <h1>Studio Verhuur</h1>
+            <p class="login-subtitle">Log in om verder te gaan</p>
+            <form id="login-form">
+                <label>Gebruikersnaam
+                    <input type="text" id="login-username" required autocomplete="username">
+                </label>
+                <label>Wachtwoord
+                    <input type="password" id="login-password" required autocomplete="current-password">
+                </label>
+                <p id="login-error" class="login-error hidden">Ongeldige inloggegevens</p>
+                <button type="submit" class="btn-primary btn-full">Inloggen</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- APP SHELL -->
+    <div id="app-shell" class="hidden">
+        <header>
+            <div class="header-content">
+                <div>
+                    <h1>Studio Verhuur</h1>
+                    <p class="subtitle">Dashboard</p>
+                </div>
+                <div class="header-user">
+                    <span id="user-display"></span>
+                    <button id="logout-btn" class="btn-small">Uitloggen</button>
+                </div>
+            </div>
+        </header>
+
+        <nav id="main-nav">
+            <button class="nav-btn active" data-section="agenda">Agenda</button>
+            <button class="nav-btn" data-section="huisregels">Huisregels</button>
+            <button class="nav-btn" data-section="strippenkaart" data-role="admin">Strippenkaarten</button>
+            <button class="nav-btn" data-section="mijn-strippenkaart" data-role="huurder">Mijn Strippenkaart</button>
+            <button class="nav-btn" data-section="contract" data-role="huurder">Contract</button>
+
+            <button class="nav-btn" data-section="huurders" data-role="admin">Huurders</button>
+        </nav>
+
+        <main>
+
+            <!-- AGENDA -->
+            <section id="agenda" class="section active">
+                <h2>Agenda</h2>
+                <div class="agenda-controls">
+                    <button id="prev-month" class="btn-small">&larr;</button>
+                    <span id="month-label"></span>
+                    <button id="next-month" class="btn-small">&rarr;</button>
+                </div>
+                <div class="calendar-header-row">
+                    <div class="calendar-header-cell">Ma</div>
+                    <div class="calendar-header-cell">Di</div>
+                    <div class="calendar-header-cell">Wo</div>
+                    <div class="calendar-header-cell">Do</div>
+                    <div class="calendar-header-cell">Vr</div>
+                    <div class="calendar-header-cell">Za</div>
+                    <div class="calendar-header-cell">Zo</div>
+                </div>
+                <div class="calendar-grid" id="calendar-grid"></div>
+                <div class="calendar-legend">
+                    <span class="legend-item"><span class="legend-dot bg-success"></span> Beschikbaar</span>
+                    <span class="legend-item"><span class="legend-dot bg-warning"></span> Check beschikbaarheid</span>
+                    <span class="legend-item"><span class="legend-dot bg-danger"></span> Niet beschikbaar</span>
+                </div>
+
+                <!-- Admin: boekingen lijst -->
+                <div id="bookings-list-wrapper" class="admin-only hidden">
+                    <h3>Boekingen deze maand</h3>
+                    <div id="bookings-list"></div>
+                </div>
+
+                <!-- Huurder: mijn boekingen -->
+                <div id="my-bookings-wrapper" class="huurder-only hidden">
+                    <h3>Mijn boekingen</h3>
+                    <div id="my-bookings-list"></div>
+                </div>
+            </section>
+
+            <!-- HUISREGELS -->
+            <section id="huisregels" class="section hidden">
+                <h2>Huisregels</h2>
+                <div class="rules-list">
+                    <div class="rule-card">
+                        <span class="rule-number">1</span>
+                        <div class="rule-text">
+                            <h4>Netjes achterlaten</h4>
+                            <p>Laat de studio achter zoals je hem aantrof. Doekje over de tafel, afwas opgeruimd, stofzuigen en controleer de badkamer voordat je vertrekt.</p>
+                        </div>
+                    </div>
+                    <div class="rule-card">
+                        <span class="rule-number">2</span>
+                        <div class="rule-text">
+                            <h4>Zorgvuldig met apparatuur</h4>
+                            <p>Ga voorzichtig om met de apparatuur. Meld schade of storingen direct.</p>
+                        </div>
+                    </div>
+                    <div class="rule-card">
+                        <span class="rule-number">3</span>
+                        <div class="rule-text">
+                            <h4>Niet roken</h4>
+                            <p>Roken is niet toegestaan in de studio.</p>
+                        </div>
+                    </div>
+                    <div class="rule-card">
+                        <span class="rule-number">4</span>
+                        <div class="rule-text">
+                            <h4>Sleutels</h4>
+                            <p>Sleutels niet uitlenen aan derden. Bij verlies direct contact opnemen.</p>
+                        </div>
+                    </div>
+                    <div class="rule-card">
+                        <span class="rule-number">5</span>
+                        <div class="rule-text">
+                            <h4>Grote spullen</h4>
+                            <p>Grote spullen achterlaten in de studio alleen in overleg.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STRIPPENKAARTEN (admin) -->
+            <section id="strippenkaart" class="section hidden" data-role="admin">
+                <h2>Strippenkaarten</h2>
+                <button id="add-card" class="btn-primary">+ Nieuwe Strippenkaart</button>
+                <div id="cards-container" class="cards-grid"></div>
+            </section>
+
+            <!-- MIJN STRIPPENKAART (huurder) -->
+            <section id="mijn-strippenkaart" class="section hidden" data-role="huurder">
+                <h2>Mijn Strippenkaart</h2>
+                <div class="strip-info-box">
+                    <p>Je strippenkaart van <strong>5 strippen</strong> is <strong>3 maanden</strong> geldig. Bij een kaart van <strong>10 strippen</strong> is dit <strong>5 maanden</strong>.</p>
+                    <p>Je kunt je afspraak tot een week van tevoren kosteloos verzetten. Bij annulering binnen een week gaat de strip verloren.</p>
+                    <p><strong>Veel plezier ermee!</strong></p>
+                </div>
+                <div id="my-cards-container"></div>
+
+                <div class="strip-info-box" style="margin-top: 2rem;">
+                    <p><strong>Vaste huur</strong></p>
+                    <p>Het is ook mogelijk om een vaste dag per week te huren. Dit kan op <strong>maandag</strong>, <strong>dinsdag</strong>, <strong>donderdag</strong> of een <strong>weekenddag</strong>, in overleg.</p>
+                    <p>De kosten zijn <strong>&euro;250,- per maand</strong> (excl. btw). Je gaat een commitment aan van ten minste <strong>6 maanden</strong> met een opzegtermijn van <strong>2 maanden</strong>.</p>
+                    <p>Interesse? Mail naar <strong>portretcoach@gmail.com</strong></p>
+                </div>
+            </section>
+
+
+            <!-- CONTRACT (huurder) -->
+            <section id="contract" class="section hidden" data-role="huurder">
+                <h2>Gebruiksovereenkomst Strippenkaart</h2>
+
+                <div id="contract-signed-banner" class="contract-signed-banner hidden">
+                    <p>Je hebt dit contract ondertekend op <strong id="contract-signed-date"></strong>.</p>
+                </div>
+
+                <div class="contract-document">
+                    <div class="contract-header">
+                        <h3>Gebruiksovereenkomst Studio / Strippenkaart</h3>
+                    </div>
+
+                    <div class="contract-body">
+                        <p><strong>Ondergetekenden</strong></p>
+                        <p>1. Mevrouw Iris van 't Riet, gevestigd aan de Van Marumhof 15, 3045 CC te Rotterdam, ingeschreven in het handelsregister van de Kamer van Koophandel onder nummer 6957752, hierna te noemen 'verhuurder',</p>
+                        <p>EN</p>
+                        <p>2. <span id="contract-huurder-naam" class="contract-field"></span>, hierna te noemen 'huurder',</p>
+
+                        <p><strong>Zijn overeengekomen:</strong></p>
+
+                        <p><strong>1. Het gehuurde, bestemming</strong></p>
+                        <p>1.1 Verhuurder stelt aan huurder de studioruimte ter beschikking (hierna 'het gehuurde'), gelegen aan de Weg en Bos 22c, 2661 DH te Bergschenhoek.</p>
+                        <p>1.2 Het gehuurde zal door huurder uitsluitend worden gebruikt als studio- en/of praktijkruimte.</p>
+                        <p>1.3 Het is huurder niet toegestaan zonder voorafgaande schriftelijke toestemming van verhuurder een andere bestemming aan het gehuurde te geven.</p>
+
+                        <p><strong>2. Strippenkaart en geldigheid</strong></p>
+                        <p>2.1 Huurder maakt gebruik van het gehuurde op basis van een strippenkaart. Per gebruiksdag wordt één strip afgeschreven.</p>
+                        <p>2.2 Een strippenkaart van 5 strippen is 3 maanden geldig vanaf de datum van uitgifte. Een strippenkaart van 10 strippen is 5 maanden geldig vanaf de datum van uitgifte.</p>
+                        <p>2.3 Niet-gebruikte strippen na de geldigheidsdatum vervallen zonder recht op restitutie.</p>
+
+                        <p><strong>3. Annulering</strong></p>
+                        <p>3.1 Een geboekte dag kan tot één week (7 dagen) van tevoren kosteloos worden geannuleerd. De strip wordt in dat geval hersteld.</p>
+                        <p>3.2 Bij annulering minder dan één week van tevoren gaat de strip verloren. De dag wordt wel weer beschikbaar gesteld.</p>
+
+                        <p><strong>4. Gebruik</strong></p>
+                        <p>4.1 Huurder dient het gehuurde na gebruik schoon en in oorspronkelijke staat achter te laten. Dit houdt in: doekje over de tafel, afwas opgeruimd, stofzuigen en de badkamer controleren voordat men vertrekt.</p>
+                        <p>4.2 Huurder dient zorgvuldig om te gaan met de aanwezige apparatuur. Schade of storingen dienen direct gemeld te worden aan verhuurder.</p>
+                        <p>4.3 Roken is niet toegestaan in de studio.</p>
+                        <p>4.4 Huurder mag redelijkerwijs gebruik maken van aanwezige koffie, thee en koffiemelk. Overige versnaperingen dient huurder zelf mee te brengen.</p>
+                        <p>4.5 Huurder mag gebruik maken van aanwezig meubilair en keukengerei. In het geval van schade zal huurder het gebruikte in oorspronkelijke staat retourneren.</p>
+
+                        <p><strong>5. Sleutels en waarborgsom</strong></p>
+                        <p>5.1 Sleutels zijn strikt persoonlijk en mogen niet worden uitgeleend aan derden.</p>
+                        <p>5.2 Bij aanvang wordt een waarborgsom van &euro;75,- in rekening gebracht voor gebruik van de sleutels. Dit is de enige kosten naast de aanschaf van de strippenkaart. Bij vermissing van de sleutel wordt de borg ingehouden.</p>
+                        <p>5.3 Bij verlies van de sleutel dient huurder dit direct te melden aan verhuurder.</p>
+
+                        <p><strong>6. Aansprakelijkheid</strong></p>
+                        <p>6.1 Huurder is aansprakelijk voor schade aan het gehuurde veroorzaakt door een hem toe te rekenen tekortschieten in de nakoming van een verplichting uit deze overeenkomst.</p>
+                        <p>6.2 Huurder dient zelf zorg te dragen voor adequate verzekeringen voor zijn eigendommen en aansprakelijkheid.</p>
+
+                        <p><strong>7. Overige bepalingen</strong></p>
+                        <p>7.1 Het is huurder niet toegestaan het gehuurde geheel of gedeeltelijk aan derden in gebruik af te staan.</p>
+                        <p>7.2 Verhuurder heeft het recht het gehuurde te betreden voor inspectie en noodzakelijk onderhoud, na voorafgaande kennisgeving aan huurder.</p>
+                        <p>7.3 Bij overtreding van de gebruiksbepalingen heeft verhuurder het recht de overeenkomst per direct te beëindigen.</p>
+                        <p>7.4 In geval van geschillen zullen partijen eerst trachten deze in onderling overleg op te lossen. Indien dit niet lukt, zal het geschil worden voorgelegd aan de bevoegde rechter.</p>
+                    </div>
+
+                    <div class="contract-signature" id="contract-signature-section">
+                        <p><strong>Ondertekening</strong></p>
+                        <div class="contract-sign-form" id="contract-sign-form">
+                            <label>Volledige naam
+                                <input type="text" id="sign-name" placeholder="Naam huurder">
+                            </label>
+                            <label>Datum
+                                <input type="date" id="sign-date">
+                            </label>
+                            <label>Plaats
+                                <input type="text" id="sign-place" placeholder="Plaats">
+                            </label>
+                            <div class="contract-agree">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="sign-agree">
+                                    <span>Ik heb de bovenstaande voorwaarden gelezen en ga hiermee akkoord.</span>
+                                </label>
+                            </div>
+                            <button id="sign-contract-btn" class="btn-primary btn-full">Ondertekenen</button>
+                        </div>
+                        <div class="contract-signed-result hidden" id="contract-signed-result">
+                            <p>Ondertekend door: <strong id="signed-name-display"></strong></p>
+                            <p>Datum: <strong id="signed-date-display"></strong></p>
+                            <p>Plaats: <strong id="signed-place-display"></strong></p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- HUURDERS (admin) -->
+            <section id="huurders" class="section hidden" data-role="admin">
+                <h2>Huurders</h2>
+                <button id="add-huurder" class="btn-primary">+ Nieuwe Huurder</button>
+                <div id="huurders-container" class="cards-grid"></div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- MODALS -->
+
+    <!-- Admin: beschikbaarheid instellen -->
+    <div id="availability-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h3>Beschikbaarheid instellen</h3>
+            <p id="avail-date-display" class="modal-date"></p>
+            <div class="avail-options">
+                <button class="avail-btn" data-status="beschikbaar">
+                    <span class="avail-dot bg-success"></span> Beschikbaar
+                </button>
+                <button class="avail-btn" data-status="check">
+                    <span class="avail-dot bg-warning"></span> Check
+                </button>
+                <button class="avail-btn" data-status="niet-beschikbaar">
+                    <span class="avail-dot bg-danger"></span> Niet beschikbaar
+                </button>
+            </div>
+            <label>Notitie (optioneel)
+                <input type="text" id="avail-note" placeholder="Bijv. 'verbouwing'">
+            </label>
+            <button class="btn-primary btn-full" id="avail-save">Opslaan</button>
+        </div>
+    </div>
+
+    <!-- Huurder: boeking bevestigen -->
+    <div id="booking-confirm-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h3>Boeking bevestigen</h3>
+            <p id="booking-date-display" class="modal-date"></p>
+            <div id="booking-strip-info" class="booking-info"></div>
+            <div class="modal-actions">
+                <button class="btn-primary" id="booking-confirm">Bevestigen</button>
+                <button class="btn-secondary" id="booking-cancel-btn">Annuleren</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin: nieuwe strippenkaart -->
+    <div id="card-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h3>Nieuwe Strippenkaart</h3>
+            <form id="card-form">
+                <label>Huurder
+                    <select id="card-huurder" required></select>
+                </label>
+                <label>Startdatum
+                    <input type="date" id="card-start" required>
+                </label>
+                <div class="form-info">
+                    <p>5 strippen &middot; 3 maanden geldig</p>
+                </div>
+                <button type="submit" class="btn-primary btn-full">Aanmaken</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin: nieuwe huurder -->
+    <div id="huurder-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h3>Nieuwe Huurder</h3>
+            <form id="huurder-form">
+                <label>Naam
+                    <input type="text" id="huurder-naam" required>
+                </label>
+                <label>Gebruikersnaam
+                    <input type="text" id="huurder-username" required>
+                </label>
+                <label>Wachtwoord
+                    <input type="text" id="huurder-password" required>
+                </label>
+                <button type="submit" class="btn-primary btn-full">Aanmaken</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
