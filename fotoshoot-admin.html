@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fotoshoot Admin — Iris van 't Riet</title>
+    <link rel="stylesheet" href="fotoshoot.css">
+</head>
+<body>
+
+    <!-- PIN LOGIN -->
+    <div id="login-screen" class="page">
+        <header>
+            <h1>Fotoshoot Admin</h1>
+            <p class="subtitle">Iris van 't Riet</p>
+        </header>
+        <div class="step">
+            <h2>Inloggen</h2>
+            <p class="step-info">Voer je PIN in om de fotoshoot-agenda te beheren.</p>
+            <form id="pin-form">
+                <label>PIN code
+                    <input type="password" id="pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Voer PIN in" autocomplete="off">
+                </label>
+                <p id="pin-error" class="error-text hidden">Onjuiste PIN code</p>
+                <button type="submit" class="btn-primary">Inloggen</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ADMIN DASHBOARD -->
+    <div id="admin-dashboard" class="page hidden">
+        <header>
+            <h1>Fotoshoot Admin</h1>
+            <p class="subtitle">Iris van 't Riet</p>
+        </header>
+
+        <!-- Publieke link -->
+        <div class="step">
+            <div class="admin-link-box">
+                <strong>Publieke boekingslink:</strong>
+                <a id="fotoshoot-public-link" href="fotoshoot.html" target="_blank">fotoshoot.html</a>
+                <button class="btn-small" id="copy-link">Kopieer link</button>
+            </div>
+        </div>
+
+        <!-- Beschikbare dagen instellen -->
+        <div class="step">
+            <h2>Beschikbare dagen</h2>
+            <p class="step-info">Voeg fotoshoot-dagen toe. Tijdslots van 2 uur (+ 30 min buffer) worden automatisch berekend.</p>
+            <div class="admin-add-form">
+                <label>Datum
+                    <input type="date" id="fs-date">
+                </label>
+                <label>Starttijd
+                    <input type="time" id="fs-start" value="10:00">
+                </label>
+                <label>Eindtijd
+                    <input type="time" id="fs-end" value="17:00">
+                </label>
+                <button class="btn-primary" id="fs-add-day">+ Dag toevoegen</button>
+            </div>
+            <div id="fs-slots-container"></div>
+        </div>
+
+        <!-- Boekingen -->
+        <div class="step">
+            <h2>Boekingen</h2>
+            <div id="fs-bookings-container"></div>
+        </div>
+
+        <!-- PIN wijzigen + uitloggen -->
+        <div class="step">
+            <h2>Instellingen</h2>
+            <div class="admin-add-form">
+                <label>PIN wijzigen
+                    <input type="password" id="new-pin" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Nieuwe PIN">
+                </label>
+                <button class="btn-primary" id="change-pin">PIN opslaan</button>
+            </div>
+            <button class="btn-back" id="logout-btn" style="margin-top:1rem">Uitloggen</button>
+        </div>
+
+        <footer>
+            <p>Iris van 't Riet &middot; Weg en Bos 22c, Bergschenhoek</p>
+        </footer>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="fotoshoot-admin.js"></script>
+</body>
+</html>

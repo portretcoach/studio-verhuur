@@ -369,6 +369,163 @@ footer {
     font-size: 0.8rem;
 }
 
+/* ========================================
+   ADMIN STYLES
+   ======================================== */
+.error-text {
+    color: var(--danger);
+    font-size: 0.85rem;
+    margin-top: -0.5rem;
+}
+
+.admin-link-box {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.admin-link-box a {
+    color: var(--primary);
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.btn-small {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.btn-small:hover { opacity: 0.85; }
+
+.btn-danger {
+    background: var(--danger);
+    color: white;
+    border: none;
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.btn-danger:hover { opacity: 0.85; }
+
+.admin-add-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.admin-add-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-light);
+}
+
+.admin-add-form input {
+    padding: 0.65rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+}
+
+.admin-add-form input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(219, 180, 88, 0.2);
+}
+
+.admin-add-form .btn-primary {
+    grid-column: 1 / -1;
+}
+
+.admin-empty {
+    color: var(--text-light);
+    font-size: 0.9rem;
+    padding: 1rem 0;
+}
+
+.admin-day-card {
+    background: var(--bg);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.admin-day-card.past { opacity: 0.5; }
+
+.admin-day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.admin-day-header h4 {
+    font-family: var(--font-heading);
+    color: var(--primary);
+    font-size: 1rem;
+}
+
+.past-label {
+    color: var(--text-light);
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
+.admin-time-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.admin-chip {
+    background: var(--warning-light);
+    border: 1px solid var(--warning);
+    border-radius: 6px;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.admin-chip.booked {
+    background: var(--danger-light);
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+.admin-booking {
+    background: var(--bg);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.admin-booking-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.4rem;
+}
+
+.admin-booking-details {
+    font-size: 0.9rem;
+    color: var(--text-light);
+    line-height: 1.5;
+}
+
+.toast-success { background: var(--success); }
+
 /* Responsive */
 @media (max-width: 480px) {
     .page { padding: 0.5rem; }
@@ -376,4 +533,5 @@ footer {
     header h1 { font-size: 1.4rem; }
     .step { padding: 1rem; }
     .time-slots-grid { grid-template-columns: 1fr; }
+    .admin-add-form { grid-template-columns: 1fr; }
 }

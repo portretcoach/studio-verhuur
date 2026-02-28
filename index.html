@@ -45,7 +45,6 @@
             <button class="nav-btn active" data-section="agenda">Agenda</button>
             <button class="nav-btn" data-section="huisregels">Huisregels</button>
             <button class="nav-btn" data-section="strippenkaart" data-role="admin">Strippenkaarten</button>
-            <button class="nav-btn" data-section="fotoshoots" data-role="admin">Fotoshoots</button>
             <button class="nav-btn" data-section="mijn-strippenkaart" data-role="huurder">Mijn Strippenkaart</button>
             <button class="nav-btn" data-section="contract" data-role="huurder">Contract</button>
 
@@ -138,36 +137,6 @@
                 <h2>Strippenkaarten</h2>
                 <button id="add-card" class="btn-primary">+ Nieuwe Strippenkaart</button>
                 <div id="cards-container" class="cards-grid"></div>
-            </section>
-
-            <!-- FOTOSHOOTS (admin) -->
-            <section id="fotoshoots" class="section hidden" data-role="admin">
-                <h2>Fotoshoots</h2>
-                <p class="section-subtitle">Beheer beschikbare fotoshoot-dagen en bekijk boekingen.</p>
-                <div class="fotoshoot-link-box">
-                    <strong>Publieke boekingslink:</strong>
-                    <a id="fotoshoot-public-link" href="fotoshoot.html" target="_blank">fotoshoot.html</a>
-                    <button class="btn-small" id="copy-fotoshoot-link">Kopieer link</button>
-                </div>
-
-                <h3>Beschikbare dagen instellen</h3>
-                <div class="fotoshoot-add-form">
-                    <label>Datum
-                        <input type="date" id="fs-date">
-                    </label>
-                    <label>Starttijd
-                        <input type="time" id="fs-start" value="10:00">
-                    </label>
-                    <label>Eindtijd
-                        <input type="time" id="fs-end" value="17:00">
-                    </label>
-                    <button class="btn-primary" id="fs-add-day">+ Dag toevoegen</button>
-                </div>
-                <p class="form-hint">Tijdslots van 2 uur (+ 30 min buffer) worden automatisch berekend.</p>
-                <div id="fs-slots-container" class="cards-grid"></div>
-
-                <h3 style="margin-top:2rem">Boekingen</h3>
-                <div id="fs-bookings-container"></div>
             </section>
 
             <!-- MIJN STRIPPENKAART (huurder) -->

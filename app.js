@@ -256,140 +256,6 @@ function getAvailableFotoshootTimes(dateStr, slot) {
 }
 
 // ============================================
-// 1e. FOTOSHOOTS ADMIN BEHEER
-// ============================================
-function addFotoshootDay() {
-    const dateInput = document.getElementById('fs-date');
-    const startInput = document.getElementById('fs-start');
-    const endInput = document.getElementById('fs-end');
-
-    const dateStr = dateInput.value;
-    const startTime = startInput.value;
-    const endTime = endInput.value;
-
-    if (!dateStr) { showToast('Kies een datum', 'error'); return; }
-    if (!startTime || !endTime) { showToast('Vul start- en eindtijd in', 'error'); return; }
-    if (dateStr < todayStr()) { showToast('Datum moet in de toekomst liggen', 'error'); return; }
-
-    const times = generateTimeSlots(startTime, endTime);
-    if (times.length === 0) {
-        showToast('Geen tijdslots mogelijk in dit tijdvenster', 'error');
-        return;
-    }
-
-    fotoshootSlots[dateStr] = { times, startTime, endTime };
-    save(STORAGE_KEYS.fotoshootSlots, fotoshootSlots);
-
-    // Update kalender beschikbaarheid
-    applyFotoshootBeschikbaarheid();
-    renderCalendar();
-    renderFotoshootAdmin();
-
-    dateInput.value = '';
-    showToast(`${times.length} tijdslot(s) toegevoegd voor ${formatDateNL(dateStr)}`, 'success');
-}
-
-function removeFotoshootDay(dateStr) {
-    delete fotoshootSlots[dateStr];
-    save(STORAGE_KEYS.fotoshootSlots, fotoshootSlots);
-
-    // Verwijder fotoshoot-status uit kalender
-    if (availability[dateStr] && availability[dateStr].note?.startsWith('Fotoshoot')) {
-        delete availability[dateStr];
-        save(STORAGE_KEYS.availability, availability);
-    }
-
-    renderCalendar();
-    renderFotoshootAdmin();
-    showToast('Fotoshoot-dag verwijderd');
-}
-
-function cancelFotoshootBooking(bookingId) {
-    fotoshootBookings = fotoshootBookings.filter(b => b.id !== bookingId);
-    save(STORAGE_KEYS.fotoshootBookings, fotoshootBookings);
-    applyFotoshootBeschikbaarheid();
-    renderCalendar();
-    renderFotoshootAdmin();
-    showToast('Boeking geannuleerd, tijdslot weer beschikbaar');
-}
-
-function renderFotoshootAdmin() {
-    // Render beschikbare dagen
-    const slotsContainer = document.getElementById('fs-slots-container');
-    if (!slotsContainer) return;
-    slotsContainer.innerHTML = '';
-
-    const sortedDates = Object.keys(fotoshootSlots).sort();
-    if (sortedDates.length === 0) {
-        slotsContainer.innerHTML = '<div class="empty-state"><p>Geen fotoshoot-dagen ingesteld</p><span>Voeg een dag toe met het formulier hierboven</span></div>';
-    } else {
-        sortedDates.forEach(dateStr => {
-            const slot = fotoshootSlots[dateStr];
-            const bookedTimes = fotoshootBookings.filter(b => b.date === dateStr).map(b => b.time);
-
-            const el = document.createElement('div');
-            el.className = 'fs-day-card';
-            el.innerHTML = `
-                <div style="display:flex;justify-content:space-between;align-items:center">
-                    <h4>${formatDateNL(dateStr)}</h4>
-                    <button class="btn-danger btn-small" data-remove-fs="${dateStr}">Verwijderen</button>
-                </div>
-                <div class="fs-times">
-                    ${slot.times.map(t => {
-                        const endH = Math.floor((parseInt(t.split(':')[0]) * 60 + parseInt(t.split(':')[1]) + FOTOSHOOT_DURATION) / 60);
-                        const endM = (parseInt(t.split(':')[0]) * 60 + parseInt(t.split(':')[1]) + FOTOSHOOT_DURATION) % 60;
-                        const endStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
-                        const isBooked = bookedTimes.includes(t);
-                        return `<span class="fs-time-chip ${isBooked ? 'booked' : ''}">${t} – ${endStr}${isBooked ? ' (geboekt)' : ''}</span>`;
-                    }).join('')}
-                </div>
-            `;
-            slotsContainer.appendChild(el);
-        });
-
-        slotsContainer.querySelectorAll('[data-remove-fs]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (confirm('Fotoshoot-dag verwijderen? Bestaande boekingen blijven bewaard.')) {
-                    removeFotoshootDay(btn.dataset.removeFs);
-                }
-            });
-        });
-    }
-
-    // Render boekingen
-    const bookingsContainer = document.getElementById('fs-bookings-container');
-    if (!bookingsContainer) return;
-
-    const sortedBookings = [...fotoshootBookings].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
-
-    if (sortedBookings.length === 0) {
-        bookingsContainer.innerHTML = '<div class="empty-state"><p>Nog geen fotoshoot-boekingen</p></div>';
-    } else {
-        bookingsContainer.innerHTML = sortedBookings.map(b => `
-            <div class="fs-booking-item">
-                <div class="fs-booking-header">
-                    <strong>${formatDateNL(b.date)} om ${b.time}</strong>
-                    ${b.date >= todayStr() ? `<button class="btn-danger btn-small" data-cancel-fs="${b.id}">Annuleren</button>` : ''}
-                </div>
-                <div class="fs-booking-details">
-                    <strong>${b.name}</strong> &middot; ${b.persons} persoon/personen<br>
-                    ${b.email} &middot; ${b.phone}<br>
-                    ${b.remark ? `<em>${b.remark}</em>` : ''}
-                </div>
-            </div>
-        `).join('');
-
-        bookingsContainer.querySelectorAll('[data-cancel-fs]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (confirm('Fotoshoot-boeking annuleren?')) {
-                    cancelFotoshootBooking(btn.dataset.cancelFs);
-                }
-            });
-        });
-    }
-}
-
-// ============================================
 // 2. STATE
 // ============================================
 let currentSession = null;
@@ -518,7 +384,6 @@ function startApp() {
     renderCalendar();
     if (role === 'admin') {
         renderStrippenkaarten();
-        renderFotoshootAdmin();
         renderHuurders();
     } else {
         renderMijnStrippenkaart();
@@ -1369,22 +1234,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const signBtn = document.getElementById('sign-contract-btn');
     if (signBtn) {
         signBtn.addEventListener('click', signContract);
-    }
-
-    // Fotoshoots admin
-    const fsAddBtn = document.getElementById('fs-add-day');
-    if (fsAddBtn) {
-        fsAddBtn.addEventListener('click', addFotoshootDay);
-    }
-    const copyLinkBtn = document.getElementById('copy-fotoshoot-link');
-    if (copyLinkBtn) {
-        copyLinkBtn.addEventListener('click', () => {
-            const link = document.getElementById('fotoshoot-public-link');
-            const url = new URL('fotoshoot.html', window.location.href).href;
-            navigator.clipboard.writeText(url).then(() => {
-                showToast('Link gekopieerd!', 'success');
-            });
-        });
     }
 
     // Init
