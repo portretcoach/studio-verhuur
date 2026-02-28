@@ -1019,6 +1019,9 @@ function renderHuurders() {
             </div>
             <div class="detail"><strong>Gebruikersnaam:</strong> ${h.username}</div>
             <div class="detail"><strong>Wachtwoord:</strong> ${h.password}</div>
+            ${h.bedrijf ? `<div class="detail"><strong>Bedrijf:</strong> ${h.bedrijf}</div>` : ''}
+            ${h.adres ? `<div class="detail"><strong>Adres:</strong> ${h.adres}</div>` : ''}
+            ${h.kvk ? `<div class="detail"><strong>KVK:</strong> ${h.kvk}</div>` : ''}
             <div class="detail"><strong>Strippenkaart:</strong> ${activeCard ? `${activeCard.totalStrips - activeCard.usedStrips} strippen over` : 'Geen actieve kaart'}</div>
             <div class="detail"><strong>Boekingen:</strong> ${bookingCount}</div>
         `;
@@ -1058,6 +1061,9 @@ function renderHuurders() {
 function createHuurder(e) {
     e.preventDefault();
     const naam = document.getElementById('huurder-naam').value.trim();
+    const bedrijf = document.getElementById('huurder-bedrijf').value.trim();
+    const adres = document.getElementById('huurder-adres').value.trim();
+    const kvk = document.getElementById('huurder-kvk').value.trim();
     const username = document.getElementById('huurder-username').value.trim().toLowerCase();
     const password = document.getElementById('huurder-password').value;
 
@@ -1072,7 +1078,10 @@ function createHuurder(e) {
         username,
         password,
         role: 'huurder',
-        naam
+        naam,
+        bedrijf,
+        adres,
+        kvk
     };
     users.push(user);
     save(STORAGE_KEYS.users, users);
@@ -1111,9 +1120,27 @@ function renderContract() {
     const huurderNaam = document.getElementById('contract-huurder-naam');
     if (!huurderNaam) return;
 
+    // Zoek de volledige gebruikersgegevens op
+    const huurder = users.find(u => u.id === currentSession?.userId);
+
     // Vul huurder naam in het contract
     if (currentSession) {
         huurderNaam.textContent = currentSession.naam || '_______________';
+    }
+
+    // Vul bedrijfsgegevens in het contract
+    const bedrijfTekst = document.getElementById('contract-huurder-bedrijf-tekst');
+    const adresTekst = document.getElementById('contract-huurder-adres-tekst');
+    const kvkTekst = document.getElementById('contract-huurder-kvk-tekst');
+
+    if (bedrijfTekst) {
+        bedrijfTekst.textContent = huurder?.bedrijf ? `, handelend onder de naam ${huurder.bedrijf}` : '';
+    }
+    if (adresTekst) {
+        adresTekst.textContent = huurder?.adres ? `, gevestigd aan de ${huurder.adres}` : '';
+    }
+    if (kvkTekst) {
+        kvkTekst.textContent = huurder?.kvk ? `, ingeschreven bij de Kamer van Koophandel onder nummer ${huurder.kvk}` : '';
     }
 
     // Check of contract al ondertekend is
