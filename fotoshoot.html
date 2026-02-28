@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fotoshoot boeken — Iris van 't Riet</title>
+    <link rel="stylesheet" href="fotoshoot.css">
+</head>
+<body>
+
+    <div class="page">
+        <header>
+            <h1>Fotoshoot boeken</h1>
+            <p class="subtitle">bij Iris van 't Riet</p>
+        </header>
+
+        <main>
+            <!-- STAP 1: Kalender -->
+            <section id="step-calendar" class="step">
+                <h2>Kies een datum</h2>
+                <p class="step-info">Selecteer een beschikbare dag (oranje) voor je fotoshoot.</p>
+                <div class="agenda-controls">
+                    <button id="prev-month" class="btn-nav">&larr;</button>
+                    <span id="month-label"></span>
+                    <button id="next-month" class="btn-nav">&rarr;</button>
+                </div>
+                <div class="calendar-header-row">
+                    <div class="calendar-header-cell">Ma</div>
+                    <div class="calendar-header-cell">Di</div>
+                    <div class="calendar-header-cell">Wo</div>
+                    <div class="calendar-header-cell">Do</div>
+                    <div class="calendar-header-cell">Vr</div>
+                    <div class="calendar-header-cell">Za</div>
+                    <div class="calendar-header-cell">Zo</div>
+                </div>
+                <div class="calendar-grid" id="calendar-grid"></div>
+                <div class="calendar-legend">
+                    <span class="legend-item"><span class="legend-dot available"></span> Beschikbaar</span>
+                    <span class="legend-item"><span class="legend-dot unavailable"></span> Niet beschikbaar</span>
+                </div>
+            </section>
+
+            <!-- STAP 2: Tijdslot kiezen -->
+            <section id="step-time" class="step hidden">
+                <h2>Kies een tijdstip</h2>
+                <p class="step-info">Beschikbare tijden op <strong id="selected-date-label"></strong>:</p>
+                <div id="time-slots" class="time-slots-grid"></div>
+                <button class="btn-back" id="back-to-calendar">&larr; Andere datum kiezen</button>
+            </section>
+
+            <!-- STAP 3: Formulier -->
+            <section id="step-form" class="step hidden">
+                <h2>Jouw gegevens</h2>
+                <p class="step-info">
+                    <strong id="booking-summary-date"></strong> om <strong id="booking-summary-time"></strong>
+                    <span class="duration-label">(2 uur)</span>
+                </p>
+                <form id="booking-form">
+                    <label>Naam *
+                        <input type="text" id="f-name" required placeholder="Je volledige naam">
+                    </label>
+                    <label>E-mail *
+                        <input type="email" id="f-email" required placeholder="naam@voorbeeld.nl">
+                    </label>
+                    <label>Telefoon *
+                        <input type="tel" id="f-phone" required placeholder="06-12345678">
+                    </label>
+                    <label>Aantal personen *
+                        <select id="f-persons" required>
+                            <option value="1">1 persoon</option>
+                            <option value="2">2 personen</option>
+                            <option value="3">3 personen</option>
+                            <option value="4">4 personen</option>
+                            <option value="5">5 personen</option>
+                            <option value="6">6 personen</option>
+                        </select>
+                    </label>
+                    <label>Opmerking
+                        <textarea id="f-remark" rows="3" placeholder="Bijv. leeftijd kinderen, wensen, bijzonderheden..."></textarea>
+                    </label>
+                    <button type="submit" class="btn-primary">Boeken</button>
+                </form>
+                <button class="btn-back" id="back-to-time">&larr; Ander tijdstip kiezen</button>
+            </section>
+
+            <!-- STAP 4: Bevestiging -->
+            <section id="step-confirmed" class="step hidden">
+                <div class="confirmation-box">
+                    <div class="confirmation-icon">&#10003;</div>
+                    <h2>Boeking bevestigd!</h2>
+                    <p>Je fotoshoot is geboekt op:</p>
+                    <p class="confirmation-date"><strong id="confirm-date"></strong> om <strong id="confirm-time"></strong></p>
+                    <p class="confirmation-detail">Je ontvangt verdere informatie via e-mail.</p>
+                    <button class="btn-primary" id="book-another">Nog een fotoshoot boeken</button>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Iris van 't Riet &middot; Weg en Bos 22c, Bergschenhoek</p>
+        </footer>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="fotoshoot.js"></script>
+</body>
+</html>

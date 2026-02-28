@@ -8,14 +8,16 @@ const STORAGE_KEYS = {
     strippenkaarten: 'sv_strippenkaarten',
     vasteHuur: 'sv_vaste_huur',
     session: 'sv_session',
+    fotoshootSlots: 'sv_fotoshoot_slots',
+    fotoshootBookings: 'sv_fotoshoot_bookings',
 };
 
 // Google Calendar Sync URL (Apps Script Web App)
 const CALENDAR_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzZFjfuhYaeazpYi9ALgdFsFmedwTPpAg53oPnW-s3h_yqWSX5XTRMreIoqZrG0JzYUSw/exec';
 
-// Calendly Sync URL (Apps Script Web App)
-// Vul hier de URL in van je Calendly Apps Script (zie calendly-sync.gs voor setup instructies)
-const CALENDLY_SYNC_URL = '';
+// Fotoshoot instellingen
+const FOTOSHOOT_DURATION = 120; // minuten
+const FOTOSHOOT_BUFFER = 30;   // minuten buffer na elke sessie
 
 const DAYS_NL = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
 const DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
@@ -182,99 +184,208 @@ function applyVasteBezetting() {
 }
 
 // ============================================
-// 1d. CALENDLY BESCHIKBAARHEID (fotoshoot data → oranje)
+// 1d. FOTOSHOOT BESCHIKBAARHEID (fotoshoot data → oranje)
 // ============================================
+let fotoshootSlots = {};
+let fotoshootBookings = [];
 
-// Fallback hardcoded datums (worden alleen gebruikt als de API niet geconfigureerd is)
-const CALENDLY_FALLBACK_DATES = [
-    '2026-03-07', '2026-03-16', '2026-03-29', '2026-03-30',
-    '2026-04-06', '2026-04-08', '2026-04-12', '2026-04-13',
-    '2026-04-28', '2026-04-29',
-    '2026-05-04', '2026-05-11', '2026-05-12', '2026-05-13', '2026-05-25'
-];
+function applyFotoshootBeschikbaarheid() {
+    fotoshootSlots = loadMap(STORAGE_KEYS.fotoshootSlots);
+    fotoshootBookings = load(STORAGE_KEYS.fotoshootBookings);
 
-// Pas Calendly datums toe op de kalender (oranje/check status)
-function applyCalendlyDates(calendlyDates) {
     let avail = loadMap(STORAGE_KEYS.availability);
     let changed = false;
 
-    // Verwijder oude Calendly entries die niet meer in de lijst staan
-    const calendlySet = new Set(calendlyDates);
+    // Verwijder oude fotoshoot entries die niet meer in slots staan
     for (const dateStr in avail) {
-        if (avail[dateStr].note && avail[dateStr].note.startsWith('Calendly') && !calendlySet.has(dateStr)) {
-            // Datum is niet meer beschikbaar in Calendly → verwijder
+        if (avail[dateStr].note && avail[dateStr].note.startsWith('Fotoshoot') && !fotoshootSlots[dateStr]) {
             delete avail[dateStr];
             changed = true;
         }
     }
 
-    // Voeg nieuwe Calendly datums toe
-    calendlyDates.forEach(dateStr => {
+    // Voeg fotoshoot-dagen toe als oranje (check) in de kalender
+    for (const dateStr in fotoshootSlots) {
         const existing = avail[dateStr];
-        // Sla over als er al een boeking is
-        if (existing && existing.bookedBy) return;
-        // Sla over als het al bezet is (rode dag gaat voor)
-        if (existing && existing.status === 'niet-beschikbaar') return;
-        // Sla over als admin handmatig iets anders heeft gezet
-        if (existing && existing.note && !existing.note.startsWith('Calendly')) return;
+        if (existing && existing.bookedBy) continue;
+        if (existing && existing.status === 'niet-beschikbaar') continue;
+        if (existing && existing.note && !existing.note.startsWith('Fotoshoot')) continue;
 
-        // Alleen toepassen als er nog geen Calendly entry staat of als het nieuw is
-        if (!existing || existing.note?.startsWith('Calendly') || existing.status === 'beschikbaar' || !existing.status) {
+        const slot = fotoshootSlots[dateStr];
+        const availTimes = getAvailableFotoshootTimes(dateStr, slot);
+
+        if (availTimes.length > 0) {
             avail[dateStr] = {
                 status: 'check',
-                note: 'Calendly fotoshoot beschikbaar'
+                note: 'Fotoshoot beschikbaar'
             };
             changed = true;
         }
-    });
+    }
 
     if (changed) {
         save(STORAGE_KEYS.availability, avail);
         availability = avail;
-        renderCalendar();
     }
-
-    return changed;
 }
 
-// Synchroniseer met Calendly via Apps Script API
-async function syncCalendly() {
-    // Als er geen URL geconfigureerd is, gebruik fallback datums
-    if (!CALENDLY_SYNC_URL) {
-        console.log('Calendly sync: geen URL geconfigureerd, gebruik fallback datums');
-        applyCalendlyDates(CALENDLY_FALLBACK_DATES);
+// Bereken beschikbare tijdslots voor een dag
+function generateTimeSlots(startTime, endTime) {
+    const slots = [];
+    const [startH, startM] = startTime.split(':').map(Number);
+    const [endH, endM] = endTime.split(':').map(Number);
+    const startMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+    const slotSize = FOTOSHOOT_DURATION + FOTOSHOOT_BUFFER; // 150 minuten
+
+    for (let m = startMinutes; m + FOTOSHOOT_DURATION <= endMinutes; m += slotSize) {
+        const h = Math.floor(m / 60);
+        const min = m % 60;
+        slots.push(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`);
+    }
+    return slots;
+}
+
+// Welke tijdslots zijn nog beschikbaar (niet geboekt)?
+function getAvailableFotoshootTimes(dateStr, slot) {
+    if (!slot) return [];
+    const bookedTimes = fotoshootBookings
+        .filter(b => b.date === dateStr)
+        .map(b => b.time);
+    return slot.times.filter(t => !bookedTimes.includes(t));
+}
+
+// ============================================
+// 1e. FOTOSHOOTS ADMIN BEHEER
+// ============================================
+function addFotoshootDay() {
+    const dateInput = document.getElementById('fs-date');
+    const startInput = document.getElementById('fs-start');
+    const endInput = document.getElementById('fs-end');
+
+    const dateStr = dateInput.value;
+    const startTime = startInput.value;
+    const endTime = endInput.value;
+
+    if (!dateStr) { showToast('Kies een datum', 'error'); return; }
+    if (!startTime || !endTime) { showToast('Vul start- en eindtijd in', 'error'); return; }
+    if (dateStr < todayStr()) { showToast('Datum moet in de toekomst liggen', 'error'); return; }
+
+    const times = generateTimeSlots(startTime, endTime);
+    if (times.length === 0) {
+        showToast('Geen tijdslots mogelijk in dit tijdvenster', 'error');
         return;
     }
 
-    try {
-        const response = await fetch(CALENDLY_SYNC_URL);
-        const data = await response.json();
+    fotoshootSlots[dateStr] = { times, startTime, endTime };
+    save(STORAGE_KEYS.fotoshootSlots, fotoshootSlots);
 
-        if (!data.success || !data.dates) {
-            console.warn('Calendly sync: fout ontvangen', data.error || data);
-            // Bij een fout, gebruik fallback datums
-            applyCalendlyDates(CALENDLY_FALLBACK_DATES);
-            return;
-        }
+    // Update kalender beschikbaarheid
+    applyFotoshootBeschikbaarheid();
+    renderCalendar();
+    renderFotoshootAdmin();
 
-        // Pas de live Calendly datums toe
-        const changed = applyCalendlyDates(data.dates);
+    dateInput.value = '';
+    showToast(`${times.length} tijdslot(s) toegevoegd voor ${formatDateNL(dateStr)}`, 'success');
+}
 
-        console.log(
-            'Calendly sync voltooid:',
-            data.count, 'beschikbare datums,',
-            'event types:', (data.eventTypes || []).join(', '),
-            'laatst gesynchroniseerd:', data.lastSync
-        );
+function removeFotoshootDay(dateStr) {
+    delete fotoshootSlots[dateStr];
+    save(STORAGE_KEYS.fotoshootSlots, fotoshootSlots);
 
-        if (changed) {
-            showToast('Calendly gesynchroniseerd ✓');
-        }
+    // Verwijder fotoshoot-status uit kalender
+    if (availability[dateStr] && availability[dateStr].note?.startsWith('Fotoshoot')) {
+        delete availability[dateStr];
+        save(STORAGE_KEYS.availability, availability);
+    }
 
-    } catch (err) {
-        console.error('Calendly sync fout:', err);
-        // Bij een netwerk/fetch fout, gebruik fallback datums
-        applyCalendlyDates(CALENDLY_FALLBACK_DATES);
+    renderCalendar();
+    renderFotoshootAdmin();
+    showToast('Fotoshoot-dag verwijderd');
+}
+
+function cancelFotoshootBooking(bookingId) {
+    fotoshootBookings = fotoshootBookings.filter(b => b.id !== bookingId);
+    save(STORAGE_KEYS.fotoshootBookings, fotoshootBookings);
+    applyFotoshootBeschikbaarheid();
+    renderCalendar();
+    renderFotoshootAdmin();
+    showToast('Boeking geannuleerd, tijdslot weer beschikbaar');
+}
+
+function renderFotoshootAdmin() {
+    // Render beschikbare dagen
+    const slotsContainer = document.getElementById('fs-slots-container');
+    if (!slotsContainer) return;
+    slotsContainer.innerHTML = '';
+
+    const sortedDates = Object.keys(fotoshootSlots).sort();
+    if (sortedDates.length === 0) {
+        slotsContainer.innerHTML = '<div class="empty-state"><p>Geen fotoshoot-dagen ingesteld</p><span>Voeg een dag toe met het formulier hierboven</span></div>';
+    } else {
+        sortedDates.forEach(dateStr => {
+            const slot = fotoshootSlots[dateStr];
+            const bookedTimes = fotoshootBookings.filter(b => b.date === dateStr).map(b => b.time);
+
+            const el = document.createElement('div');
+            el.className = 'fs-day-card';
+            el.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h4>${formatDateNL(dateStr)}</h4>
+                    <button class="btn-danger btn-small" data-remove-fs="${dateStr}">Verwijderen</button>
+                </div>
+                <div class="fs-times">
+                    ${slot.times.map(t => {
+                        const endH = Math.floor((parseInt(t.split(':')[0]) * 60 + parseInt(t.split(':')[1]) + FOTOSHOOT_DURATION) / 60);
+                        const endM = (parseInt(t.split(':')[0]) * 60 + parseInt(t.split(':')[1]) + FOTOSHOOT_DURATION) % 60;
+                        const endStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+                        const isBooked = bookedTimes.includes(t);
+                        return `<span class="fs-time-chip ${isBooked ? 'booked' : ''}">${t} – ${endStr}${isBooked ? ' (geboekt)' : ''}</span>`;
+                    }).join('')}
+                </div>
+            `;
+            slotsContainer.appendChild(el);
+        });
+
+        slotsContainer.querySelectorAll('[data-remove-fs]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (confirm('Fotoshoot-dag verwijderen? Bestaande boekingen blijven bewaard.')) {
+                    removeFotoshootDay(btn.dataset.removeFs);
+                }
+            });
+        });
+    }
+
+    // Render boekingen
+    const bookingsContainer = document.getElementById('fs-bookings-container');
+    if (!bookingsContainer) return;
+
+    const sortedBookings = [...fotoshootBookings].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+
+    if (sortedBookings.length === 0) {
+        bookingsContainer.innerHTML = '<div class="empty-state"><p>Nog geen fotoshoot-boekingen</p></div>';
+    } else {
+        bookingsContainer.innerHTML = sortedBookings.map(b => `
+            <div class="fs-booking-item">
+                <div class="fs-booking-header">
+                    <strong>${formatDateNL(b.date)} om ${b.time}</strong>
+                    ${b.date >= todayStr() ? `<button class="btn-danger btn-small" data-cancel-fs="${b.id}">Annuleren</button>` : ''}
+                </div>
+                <div class="fs-booking-details">
+                    <strong>${b.name}</strong> &middot; ${b.persons} persoon/personen<br>
+                    ${b.email} &middot; ${b.phone}<br>
+                    ${b.remark ? `<em>${b.remark}</em>` : ''}
+                </div>
+            </div>
+        `).join('');
+
+        bookingsContainer.querySelectorAll('[data-cancel-fs]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (confirm('Fotoshoot-boeking annuleren?')) {
+                    cancelFotoshootBooking(btn.dataset.cancelFs);
+                }
+            });
+        });
     }
 }
 
@@ -407,6 +518,7 @@ function startApp() {
     renderCalendar();
     if (role === 'admin') {
         renderStrippenkaarten();
+        renderFotoshootAdmin();
         renderHuurders();
     } else {
         renderMijnStrippenkaart();
@@ -415,8 +527,8 @@ function startApp() {
 
     // Vaste bezetting toepassen (donderdagen/vrijdagen)
     applyVasteBezetting();
-    // Calendly beschikbaarheid synchroniseren (oranje — via API of fallback)
-    syncCalendly();
+    // Fotoshoot beschikbaarheid toepassen (oranje)
+    applyFotoshootBeschikbaarheid();
     // Automatisch synchroniseren met Google Calendar
     syncGoogleCalendar();
 }
@@ -1257,6 +1369,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const signBtn = document.getElementById('sign-contract-btn');
     if (signBtn) {
         signBtn.addEventListener('click', signContract);
+    }
+
+    // Fotoshoots admin
+    const fsAddBtn = document.getElementById('fs-add-day');
+    if (fsAddBtn) {
+        fsAddBtn.addEventListener('click', addFotoshootDay);
+    }
+    const copyLinkBtn = document.getElementById('copy-fotoshoot-link');
+    if (copyLinkBtn) {
+        copyLinkBtn.addEventListener('click', () => {
+            const link = document.getElementById('fotoshoot-public-link');
+            const url = new URL('fotoshoot.html', window.location.href).href;
+            navigator.clipboard.writeText(url).then(() => {
+                showToast('Link gekopieerd!', 'success');
+            });
+        });
     }
 
     // Init
