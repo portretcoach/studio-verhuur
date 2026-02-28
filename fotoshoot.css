@@ -361,6 +361,120 @@ form textarea:focus {
     to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+/* Booking Code Box (bevestigingsscherm) */
+.booking-code-box {
+    background: var(--primary);
+    color: white;
+    border-radius: var(--radius);
+    padding: 1rem 1.5rem;
+    margin: 1rem auto;
+    display: inline-block;
+}
+
+.code-label {
+    display: block;
+    font-size: 0.8rem;
+    opacity: 0.8;
+    margin-bottom: 0.25rem;
+}
+
+.code-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 2px;
+}
+
+/* Lookup link under calendar */
+.lookup-link {
+    text-align: center;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+/* Reschedule banner */
+.reschedule-banner {
+    background: var(--warning-light);
+    border: 1px solid var(--warning);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    color: var(--text);
+    margin-bottom: 1rem;
+}
+
+/* Booking detail card (lookup result) */
+.booking-detail-card {
+    background: var(--bg);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-top: 1rem;
+}
+
+.booking-detail-card h3 {
+    font-family: var(--font-heading);
+    color: var(--primary);
+    margin-bottom: 1rem;
+}
+
+.booking-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.booking-detail-row .label {
+    color: var(--text-light);
+    font-size: 0.85rem;
+}
+
+.booking-code-display {
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    letter-spacing: 1px;
+    background: var(--primary);
+    color: white;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.booking-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+}
+
+.booking-actions .btn-primary {
+    flex: 1;
+}
+
+.btn-cancel {
+    flex: 1;
+    background: var(--danger);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-cancel:hover { opacity: 0.9; }
+
+/* Cancelled card */
+.booking-detail-card.cancelled {
+    text-align: center;
+}
+
+.cancel-icon {
+    background: var(--danger) !important;
+}
+
 /* Footer */
 footer {
     text-align: center;
@@ -516,6 +630,25 @@ footer {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 0.4rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.admin-booking-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.admin-booking-code {
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    font-size: 0.8rem;
+    background: var(--primary);
+    color: white;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    letter-spacing: 1px;
 }
 
 .admin-booking-details {

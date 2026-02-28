@@ -239,7 +239,10 @@ function renderBookings() {
         <div class="admin-booking">
             <div class="admin-booking-header">
                 <strong>${formatDateNL(b.date)} om ${b.time} – ${formatEndTime(b.time)}</strong>
-                ${b.date >= todayStr() ? `<button class="btn-danger btn-small" data-cancel="${b.id}">Annuleren</button>` : ''}
+                <div class="admin-booking-actions">
+                    ${b.code ? `<span class="admin-booking-code">${b.code}</span>` : ''}
+                    ${b.date >= todayStr() ? `<button class="btn-danger btn-small" data-cancel="${b.id}">Annuleren</button>` : ''}
+                </div>
             </div>
             <div class="admin-booking-details">
                 <strong>${b.name}</strong> &middot; ${b.persons} ${b.persons === 1 ? 'persoon' : 'personen'}<br>

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fotoshoot boeken — Iris van 't Riet</title>
     <link rel="stylesheet" href="fotoshoot.css">
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
 
@@ -38,6 +39,9 @@
                     <span class="legend-item"><span class="legend-dot available"></span> Beschikbaar</span>
                     <span class="legend-item"><span class="legend-dot unavailable"></span> Niet beschikbaar</span>
                 </div>
+                <div class="lookup-link">
+                    <button class="btn-back" id="show-lookup">Boeking wijzigen of annuleren?</button>
+                </div>
             </section>
 
             <!-- STAP 2: Tijdslot kiezen -->
@@ -55,6 +59,9 @@
                     <strong id="booking-summary-date"></strong> om <strong id="booking-summary-time"></strong>
                     <span class="duration-label">(2 uur)</span>
                 </p>
+                <div id="reschedule-banner" class="reschedule-banner hidden">
+                    Je bent je boeking aan het verzetten. Je boekingscode blijft hetzelfde.
+                </div>
                 <form id="booking-form">
                     <label>Naam *
                         <input type="text" id="f-name" required placeholder="Je volledige naam">
@@ -87,12 +94,30 @@
             <section id="step-confirmed" class="step hidden">
                 <div class="confirmation-box">
                     <div class="confirmation-icon">&#10003;</div>
-                    <h2>Boeking bevestigd!</h2>
-                    <p>Je fotoshoot is geboekt op:</p>
+                    <h2 id="confirm-title">Boeking bevestigd!</h2>
+                    <p id="confirm-subtitle">Je fotoshoot is geboekt op:</p>
                     <p class="confirmation-date"><strong id="confirm-date"></strong> om <strong id="confirm-time"></strong></p>
-                    <p class="confirmation-detail">Je ontvangt verdere informatie via e-mail.</p>
+                    <div class="booking-code-box">
+                        <span class="code-label">Jouw boekingscode:</span>
+                        <span class="code-value" id="confirm-code"></span>
+                    </div>
+                    <p class="confirmation-detail">Bewaar deze code om je boeking te wijzigen of annuleren. Je ontvangt ook een bevestiging per e-mail.</p>
                     <button class="btn-primary" id="book-another">Nog een fotoshoot boeken</button>
                 </div>
+            </section>
+
+            <!-- STAP 5: Boeking opzoeken -->
+            <section id="step-lookup" class="step hidden">
+                <h2>Boeking opzoeken</h2>
+                <p class="step-info">Voer je boekingscode in om je fotoshoot te wijzigen of annuleren.</p>
+                <form id="lookup-form">
+                    <label>Boekingscode
+                        <input type="text" id="lookup-code" placeholder="Bijv. FS-A3K9" style="text-transform:uppercase" maxlength="7">
+                    </label>
+                    <button type="button" class="btn-primary" id="lookup-btn">Opzoeken</button>
+                </form>
+                <div id="lookup-result"></div>
+                <button class="btn-back" id="back-to-calendar-from-lookup">&larr; Terug naar kalender</button>
             </section>
         </main>
 
