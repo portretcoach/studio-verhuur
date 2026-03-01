@@ -19,7 +19,7 @@
  *
  * JOUW GEGEVENS:
  */
-const SHEET_ID = 'JOUW_GOOGLE_SHEET_ID';
+const SHEET_ID = '1khHoZRvQpgFQTeN0UveKWSs6lfTjqoObB9ooigWhU2s';
 const SHEET_NAME = 'Boekingen';
 const SENDER_NAME = 'Iris van \'t Riet Fotografie';
 

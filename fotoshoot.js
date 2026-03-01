@@ -19,13 +19,13 @@ const DAYS_NL = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zate
 // ============================================
 // EmailJS configuratie — vul je eigen gegevens in
 // ============================================
-const EMAILJS_PUBLIC_KEY = 'JOUW_PUBLIC_KEY';       // EmailJS Public Key
-const EMAILJS_SERVICE_ID = 'JOUW_SERVICE_ID';       // EmailJS Service ID
-const EMAILJS_TEMPLATE_CONFIRM = 'JOUW_TEMPLATE_BEVESTIGING'; // Template ID bevestiging
-const EMAILJS_TEMPLATE_RESCHEDULE = 'JOUW_TEMPLATE_VERZET';   // Template ID verzet-bevestiging
+const EMAILJS_PUBLIC_KEY = 'RtX6RSZRrTCmSOoDw';       // EmailJS Public Key
+const EMAILJS_SERVICE_ID = 'service_4nkxqgj';       // EmailJS Service ID
+const EMAILJS_TEMPLATE_CONFIRM = 'template_dk1f8ji'; // Template ID bevestiging
+const EMAILJS_TEMPLATE_RESCHEDULE = 'template_3cjid5i';   // Template ID verzet-bevestiging
 
 // Google Apps Script URL voor herinneringen
-const REMINDER_SCRIPT_URL = 'JOUW_APPS_SCRIPT_URL'; // Apps Script Web App URL
+const REMINDER_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyaqHCzaUpebOEZovD8DMpWoOYSmtmEIQdPF8VmWQMvYAwAxvw1ZGkLJcfKqvDNY-gGoQ/exec';
 
 // ============================================
 // HELPERS
