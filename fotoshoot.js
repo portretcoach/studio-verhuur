@@ -208,7 +208,6 @@ function showForm(dateStr, time, endStr) {
         document.getElementById('f-name').value = rescheduleBooking.name;
         document.getElementById('f-email').value = rescheduleBooking.email;
         document.getElementById('f-phone').value = rescheduleBooking.phone;
-        document.getElementById('f-persons').value = rescheduleBooking.persons;
         document.getElementById('f-remark').value = rescheduleBooking.remark || '';
 
         // Toon verzet-banner
@@ -226,7 +225,6 @@ function handleBooking(e) {
     const name = document.getElementById('f-name').value.trim();
     const email = document.getElementById('f-email').value.trim();
     const phone = document.getElementById('f-phone').value.trim();
-    const persons = document.getElementById('f-persons').value;
     const remark = document.getElementById('f-remark').value.trim();
 
     if (!name || !email || !phone) {
@@ -262,7 +260,6 @@ function handleBooking(e) {
         name,
         email,
         phone,
-        persons: parseInt(persons),
         remark,
         createdAt: new Date().toISOString()
     };
@@ -410,7 +407,6 @@ function sendConfirmationEmail(booking, isReschedule, oldBookingInfo) {
         booking_date: formatDateNL(booking.date),
         booking_time: `${booking.time} – ${endStr}`,
         booking_code: booking.code,
-        booking_persons: booking.persons,
         booking_remark: booking.remark || '-',
         page_url: pageUrl,
     };
@@ -449,7 +445,6 @@ function registerReminder(booking) {
             date: booking.date,
             time: booking.time,
             endTime: endStr,
-            persons: booking.persons,
             phone: booking.phone,
             remark: booking.remark || '',
         })
