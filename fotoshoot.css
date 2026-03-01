@@ -209,8 +209,8 @@ header .subtitle {
 /* Time Slots */
 .time-slots-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 0.5rem;
     margin-bottom: 1rem;
 }
 
@@ -222,6 +222,10 @@ header .subtitle {
     text-align: center;
     cursor: pointer;
     transition: all 0.15s;
+}
+
+.time-slot-compact {
+    padding: 0.6rem 0.5rem;
 }
 
 .time-slot:hover {
@@ -236,13 +240,9 @@ header .subtitle {
     font-family: var(--font-heading);
 }
 
-.time-slot .time-duration {
-    font-size: 0.8rem;
-    color: var(--text-light);
-    margin-top: 0.2rem;
+.time-slot-compact .time-range {
+    font-size: 1rem;
 }
-
-.time-slot:hover .time-duration { color: rgba(255,255,255,0.8); }
 
 /* Form */
 form {
@@ -603,6 +603,12 @@ footer {
     gap: 0.4rem;
 }
 
+.admin-availability {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    margin: 0 0 0.5rem;
+}
+
 .admin-chip {
     background: var(--warning-light);
     border: 1px solid var(--warning);
@@ -665,6 +671,6 @@ footer {
     header { padding: 1.5rem 1rem; }
     header h1 { font-size: 1.4rem; }
     .step { padding: 1rem; }
-    .time-slots-grid { grid-template-columns: 1fr; }
+    .time-slots-grid { grid-template-columns: repeat(3, 1fr); }
     .admin-add-form { grid-template-columns: 1fr; }
 }

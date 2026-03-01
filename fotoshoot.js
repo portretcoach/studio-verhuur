@@ -6,9 +6,9 @@ const STORAGE_KEYS = {
     fotoshootBookings: 'sv_fotoshoot_bookings',
 };
 
-const FOTOSHOOT_DURATION = 120; // minuten
-const FOTOSHOOT_BUFFER = 30;
-const MAX_BOOKINGS_PER_DAY = 2; // maximaal aantal boekingen per dag
+const BOOKING_BLOCK_MINUTES = 150; // 2,5 uur blokkering na elke boeking
+const TIME_STEP_MINUTES = 30;     // tijdstappen van 30 minuten
+const MAX_BOOKINGS_PER_DAY = 2;   // maximaal aantal boekingen per dag
 
 const MONTHS_NL = [
     'januari', 'februari', 'maart', 'april', 'mei', 'juni',
@@ -76,12 +76,19 @@ function formatDateNL(dateStr) {
     return `${dayName} ${d.getDate()} ${MONTHS_NL[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-function formatEndTime(time) {
+function timeToMinutes(time) {
     const [h, m] = time.split(':').map(Number);
-    const endMinutes = h * 60 + m + FOTOSHOOT_DURATION;
-    const endH = Math.floor(endMinutes / 60);
-    const endM = endMinutes % 60;
-    return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+    return h * 60 + m;
+}
+
+function minutesToTime(mins) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function formatBlockEndTime(time) {
+    return minutesToTime(timeToMinutes(time) + BOOKING_BLOCK_MINUTES);
 }
 
 // ============================================
@@ -104,8 +111,19 @@ function getAvailableTimes(dateStr) {
     const dayBookings = fotoshootBookings.filter(b => b.date === dateStr);
     // Max boekingen per dag bereikt → dag is vol
     if (dayBookings.length >= MAX_BOOKINGS_PER_DAY) return [];
-    const bookedTimes = dayBookings.map(b => b.time);
-    return slot.times.filter(t => !bookedTimes.includes(t));
+
+    // Genereer alle tijden in 30-min stappen binnen het beschikbare venster
+    const startMin = timeToMinutes(slot.startTime);
+    const endMin = timeToMinutes(slot.endTime);
+    const bookedMinutes = dayBookings.map(b => timeToMinutes(b.time));
+
+    const available = [];
+    for (let m = startMin; m < endMin; m += TIME_STEP_MINUTES) {
+        // Check of dit tijdstip binnen een geblokkeerd bereik valt
+        const isBlocked = bookedMinutes.some(bm => m >= bm && m < bm + BOOKING_BLOCK_MINUTES);
+        if (!isBlocked) available.push(minutesToTime(m));
+    }
+    return available;
 }
 
 function renderCalendar() {
@@ -179,14 +197,10 @@ function showTimeSlots(dateStr) {
     const availTimes = getAvailableTimes(dateStr);
 
     availTimes.forEach(time => {
-        const endStr = formatEndTime(time);
         const el = document.createElement('div');
-        el.className = 'time-slot';
-        el.innerHTML = `
-            <div class="time-range">${time} – ${endStr}</div>
-            <div class="time-duration">2 uur fotoshoot</div>
-        `;
-        el.addEventListener('click', () => showForm(dateStr, time, endStr));
+        el.className = 'time-slot time-slot-compact';
+        el.innerHTML = `<div class="time-range">${time}</div>`;
+        el.addEventListener('click', () => showForm(dateStr, time));
         container.appendChild(el);
     });
 
@@ -196,12 +210,12 @@ function showTimeSlots(dateStr) {
 // ============================================
 // FORM & BOOKING
 // ============================================
-function showForm(dateStr, time, endStr) {
+function showForm(dateStr, time) {
     selectedDate = dateStr;
     selectedTime = time;
 
     document.getElementById('booking-summary-date').textContent = formatDateNL(dateStr);
-    document.getElementById('booking-summary-time').textContent = `${time} – ${endStr}`;
+    document.getElementById('booking-summary-time').textContent = `om ${time}`;
 
     // Als we aan het verzetten zijn, vul de naam/email/etc alvast in
     if (rescheduleBooking) {
@@ -396,7 +410,6 @@ function sendConfirmationEmail(booking, isReschedule, oldBookingInfo) {
         return;
     }
 
-    const endStr = formatEndTime(booking.time);
     const pageUrl = window.location.href.split('?')[0];
 
     const templateId = isReschedule ? EMAILJS_TEMPLATE_RESCHEDULE : EMAILJS_TEMPLATE_CONFIRM;
@@ -405,7 +418,7 @@ function sendConfirmationEmail(booking, isReschedule, oldBookingInfo) {
         to_name: booking.name,
         to_email: booking.email,
         booking_date: formatDateNL(booking.date),
-        booking_time: `${booking.time} – ${endStr}`,
+        booking_time: booking.time,
         booking_code: booking.code,
         booking_remark: booking.remark || '-',
         page_url: pageUrl,
@@ -431,8 +444,6 @@ function registerReminder(booking) {
         return;
     }
 
-    const endStr = formatEndTime(booking.time);
-
     fetch(REMINDER_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
@@ -444,7 +455,6 @@ function registerReminder(booking) {
             email: booking.email,
             date: booking.date,
             time: booking.time,
-            endTime: endStr,
             phone: booking.phone,
             remark: booking.remark || '',
         })

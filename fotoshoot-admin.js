@@ -8,8 +8,7 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULT_PIN = '1234';
-const FOTOSHOOT_DURATION = 120; // minuten
-const FOTOSHOOT_BUFFER = 30;   // minuten buffer na elke sessie
+const BOOKING_BLOCK_MINUTES = 150; // 2,5 uur blokkering na elke boeking
 
 const MONTHS_NL = [
     'januari', 'februari', 'maart', 'april', 'mei', 'juni',
@@ -109,27 +108,11 @@ function loadData() {
 }
 
 // ============================================
-// TIME SLOTS
+// HELPERS — tijd
 // ============================================
-function generateTimeSlots(startTime, endTime) {
-    const slots = [];
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
-    const startMinutes = startH * 60 + startM;
-    const endMinutes = endH * 60 + endM;
-    const slotSize = FOTOSHOOT_DURATION + FOTOSHOOT_BUFFER;
-
-    for (let m = startMinutes; m + FOTOSHOOT_DURATION <= endMinutes; m += slotSize) {
-        const h = Math.floor(m / 60);
-        const min = m % 60;
-        slots.push(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`);
-    }
-    return slots;
-}
-
-function formatEndTime(time) {
+function formatBlockEnd(time) {
     const [h, m] = time.split(':').map(Number);
-    const endMinutes = h * 60 + m + FOTOSHOOT_DURATION;
+    const endMinutes = h * 60 + m + BOOKING_BLOCK_MINUTES;
     const endH = Math.floor(endMinutes / 60);
     const endM = endMinutes % 60;
     return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
@@ -146,19 +129,14 @@ function addFotoshootDay() {
     if (!dateStr) { showToast('Kies een datum', 'error'); return; }
     if (!startTime || !endTime) { showToast('Vul start- en eindtijd in', 'error'); return; }
     if (dateStr < todayStr()) { showToast('Datum moet in de toekomst liggen', 'error'); return; }
+    if (startTime >= endTime) { showToast('Eindtijd moet na starttijd liggen', 'error'); return; }
 
-    const times = generateTimeSlots(startTime, endTime);
-    if (times.length === 0) {
-        showToast('Geen tijdslots mogelijk in dit tijdvenster', 'error');
-        return;
-    }
-
-    fotoshootSlots[dateStr] = { times, startTime, endTime };
+    fotoshootSlots[dateStr] = { startTime, endTime };
     save(STORAGE_KEYS.fotoshootSlots, fotoshootSlots);
 
     document.getElementById('fs-date').value = '';
     renderAll();
-    showToast(`${times.length} tijdslot(s) toegevoegd voor ${formatDateNL(dateStr)}`, 'success');
+    showToast(`Beschikbaar ${startTime}–${endTime} voor ${formatDateNL(dateStr)}`, 'success');
 }
 
 function removeFotoshootDay(dateStr) {
@@ -198,24 +176,24 @@ function renderSlots() {
 
     sortedDates.forEach(dateStr => {
         const slot = fotoshootSlots[dateStr];
-        const bookedTimes = fotoshootBookings.filter(b => b.date === dateStr).map(b => b.time);
+        const dayBookings = fotoshootBookings.filter(b => b.date === dateStr);
         const isPast = dateStr < todayStr();
 
         const el = document.createElement('div');
         el.className = 'admin-day-card';
         if (isPast) el.classList.add('past');
 
+        const bookingChips = dayBookings.length > 0
+            ? dayBookings.map(b => `<span class="admin-chip booked">${b.time} — ${b.name}</span>`).join('')
+            : '<span class="admin-chip">Geen boekingen</span>';
+
         el.innerHTML = `
             <div class="admin-day-header">
                 <h4>${formatDateNL(dateStr)}</h4>
                 ${!isPast ? `<button class="btn-danger btn-small" data-remove="${dateStr}">Verwijderen</button>` : '<span class="past-label">Verlopen</span>'}
             </div>
-            <div class="admin-time-chips">
-                ${slot.times.map(t => {
-                    const isBooked = bookedTimes.includes(t);
-                    return `<span class="admin-chip ${isBooked ? 'booked' : ''}">${t} – ${formatEndTime(t)}${isBooked ? ' (geboekt)' : ''}</span>`;
-                }).join('')}
-            </div>
+            <p class="admin-availability">Beschikbaar ${slot.startTime} – ${slot.endTime}</p>
+            <div class="admin-time-chips">${bookingChips}</div>
         `;
         container.appendChild(el);
     });
@@ -238,14 +216,14 @@ function renderBookings() {
     container.innerHTML = sorted.map(b => `
         <div class="admin-booking">
             <div class="admin-booking-header">
-                <strong>${formatDateNL(b.date)} om ${b.time} – ${formatEndTime(b.time)}</strong>
+                <strong>${formatDateNL(b.date)} om ${b.time}</strong>
                 <div class="admin-booking-actions">
                     ${b.code ? `<span class="admin-booking-code">${b.code}</span>` : ''}
                     ${b.date >= todayStr() ? `<button class="btn-danger btn-small" data-cancel="${b.id}">Annuleren</button>` : ''}
                 </div>
             </div>
             <div class="admin-booking-details">
-                <strong>${b.name}</strong> &middot; ${b.persons} ${b.persons === 1 ? 'persoon' : 'personen'}<br>
+                <strong>${b.name}</strong><br>
                 ${b.email} &middot; ${b.phone}
                 ${b.remark ? `<br><em>${b.remark}</em>` : ''}
             </div>
