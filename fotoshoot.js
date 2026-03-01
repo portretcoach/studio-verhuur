@@ -282,9 +282,8 @@ function handleBooking(e) {
     save(STORAGE_KEYS.fotoshootBookings, fotoshootBookings);
 
     // Bevestiging tonen
-    const endStr = formatEndTime(selectedTime);
     document.getElementById('confirm-date').textContent = formatDateNL(selectedDate);
-    document.getElementById('confirm-time').textContent = `${selectedTime} – ${endStr}`;
+    document.getElementById('confirm-time').textContent = `om ${selectedTime}`;
     document.getElementById('confirm-code').textContent = bookingCode;
 
     if (rescheduleBooking) {
@@ -333,7 +332,6 @@ function lookupBooking() {
 
     // Toon boekingsdetails
     const container = document.getElementById('lookup-result');
-    const endStr = formatEndTime(booking.time);
     container.innerHTML = `
         <div class="booking-detail-card">
             <h3>Jouw boeking</h3>
@@ -343,7 +341,7 @@ function lookupBooking() {
             </div>
             <div class="booking-detail-row">
                 <span class="label">Tijd</span>
-                <strong>${booking.time} – ${endStr}</strong>
+                <strong>om ${booking.time}</strong>
             </div>
             <div class="booking-detail-row">
                 <span class="label">Naam</span>
