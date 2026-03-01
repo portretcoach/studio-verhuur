@@ -75,8 +75,8 @@ function registerBooking(data) {
         data.email,
         data.date,
         data.time,
-        data.endTime,
-        data.persons,
+        data.endTime || '',
+        data.persons || '',
         data.phone || '',
         data.remark || '',
         'nee'
@@ -95,8 +95,8 @@ function registerBooking(data) {
     data.email,
     data.date,
     data.time,
-    data.endTime,
-    data.persons,
+    data.endTime || '',
+    data.persons || '',
     data.phone || '',
     data.remark || '',
     'nee'
@@ -198,8 +198,7 @@ function sendReminderEmail(name, email, date, startTime, endTime, persons, code)
     + '<p>Dit is een herinnering dat je <strong>overmorgen</strong> een fotoshoot hebt:</p>'
     + '<div style="background: #f5f0ea; padding: 1rem; border-radius: 8px; margin: 1rem 0;">'
     + '<p style="margin: 0.3rem 0;"><strong>Datum:</strong> ' + dateNL + '</p>'
-    + '<p style="margin: 0.3rem 0;"><strong>Tijd:</strong> ' + startTime + ' \u2013 ' + endTime + '</p>'
-    + '<p style="margin: 0.3rem 0;"><strong>Personen:</strong> ' + persons + '</p>'
+    + '<p style="margin: 0.3rem 0;"><strong>Tijd:</strong> ' + startTime + '</p>'
     + '<p style="margin: 0.3rem 0;"><strong>Code:</strong> ' + code + '</p>'
     + '</div>'
     + '<p><strong>Locatie:</strong><br>Weg en Bos 22c, Bergschenhoek</p>'
@@ -210,7 +209,7 @@ function sendReminderEmail(name, email, date, startTime, endTime, persons, code)
     + '</div>';
 
   GmailApp.sendEmail(email, subject,
-    'Herinnering: je fotoshoot op ' + dateNL + ' van ' + startTime + ' tot ' + endTime + '. Locatie: Weg en Bos 22c, Bergschenhoek. Code: ' + code,
+    'Herinnering: je fotoshoot op ' + dateNL + ' om ' + startTime + '. Locatie: Weg en Bos 22c, Bergschenhoek. Code: ' + code,
     {
       name: SENDER_NAME,
       htmlBody: htmlBody
@@ -250,8 +249,7 @@ function sendAdminNotification(data, isReschedule) {
     + '<div style="background: #f5f0ea; padding: 1rem; border-radius: 8px; margin: 1rem 0;">'
     + '<p style="margin: 0.3rem 0;"><strong>Naam:</strong> ' + data.name + '</p>'
     + '<p style="margin: 0.3rem 0;"><strong>Datum:</strong> ' + dateNL + '</p>'
-    + '<p style="margin: 0.3rem 0;"><strong>Tijd:</strong> ' + data.time + ' \u2013 ' + data.endTime + '</p>'
-    + '<p style="margin: 0.3rem 0;"><strong>Personen:</strong> ' + data.persons + '</p>'
+    + '<p style="margin: 0.3rem 0;"><strong>Tijd:</strong> ' + data.time + '</p>'
     + '<p style="margin: 0.3rem 0;"><strong>Telefoon:</strong> ' + (data.phone || '-') + '</p>'
     + '<p style="margin: 0.3rem 0;"><strong>E-mail:</strong> ' + data.email + '</p>'
     + '<p style="margin: 0.3rem 0;"><strong>Code:</strong> ' + data.code + '</p>'
@@ -263,8 +261,7 @@ function sendAdminNotification(data, isReschedule) {
   var plainText = typeLabel + '\n\n'
     + 'Naam: ' + data.name + '\n'
     + 'Datum: ' + dateNL + '\n'
-    + 'Tijd: ' + data.time + ' - ' + data.endTime + '\n'
-    + 'Personen: ' + data.persons + '\n'
+    + 'Tijd: ' + data.time + '\n'
     + 'Telefoon: ' + (data.phone || '-') + '\n'
     + 'E-mail: ' + data.email + '\n'
     + 'Code: ' + data.code + '\n'
@@ -287,9 +284,10 @@ function createCalendarEvent(data) {
   try {
     var calendar = CalendarApp.getDefaultCalendar();
 
-    // Parse datum en tijd
+    // Parse datum en tijd — endTime is de blokkeerperiode (2,5 uur)
     var startDateTime = new Date(data.date + 'T' + data.time + ':00');
-    var endDateTime = new Date(data.date + 'T' + data.endTime + ':00');
+    var endTime = data.endTime || data.time; // fallback als endTime ontbreekt
+    var endDateTime = new Date(data.date + 'T' + endTime + ':00');
 
     // Titel: klantnaam + boekingscode
     var title = 'Fotoshoot: ' + data.name + ' (' + data.code + ')';
@@ -299,7 +297,6 @@ function createCalendarEvent(data) {
       + 'Naam: ' + data.name + '\n'
       + 'E-mail: ' + data.email + '\n'
       + 'Telefoon: ' + (data.phone || '-') + '\n'
-      + 'Personen: ' + data.persons + '\n'
       + 'Boekingscode: ' + data.code + '\n'
       + 'Opmerking: ' + (data.remark || '-');
 

@@ -455,6 +455,7 @@ function registerReminder(booking) {
             email: booking.email,
             date: booking.date,
             time: booking.time,
+            endTime: formatBlockEndTime(booking.time),
             phone: booking.phone,
             remark: booking.remark || '',
         })
