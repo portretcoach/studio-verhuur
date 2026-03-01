@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
 
 const FOTOSHOOT_DURATION = 120; // minuten
 const FOTOSHOOT_BUFFER = 30;
+const MAX_BOOKINGS_PER_DAY = 2; // maximaal aantal boekingen per dag
 
 const MONTHS_NL = [
     'januari', 'februari', 'maart', 'april', 'mei', 'juni',
@@ -100,9 +101,10 @@ let rescheduleBooking = null; // als we een boeking aan het verzetten zijn
 function getAvailableTimes(dateStr) {
     const slot = fotoshootSlots[dateStr];
     if (!slot) return [];
-    const bookedTimes = fotoshootBookings
-        .filter(b => b.date === dateStr)
-        .map(b => b.time);
+    const dayBookings = fotoshootBookings.filter(b => b.date === dateStr);
+    // Max boekingen per dag bereikt → dag is vol
+    if (dayBookings.length >= MAX_BOOKINGS_PER_DAY) return [];
+    const bookedTimes = dayBookings.map(b => b.time);
     return slot.times.filter(t => !bookedTimes.includes(t));
 }
 
@@ -448,6 +450,8 @@ function registerReminder(booking) {
             time: booking.time,
             endTime: endStr,
             persons: booking.persons,
+            phone: booking.phone,
+            remark: booking.remark || '',
         })
     })
     .then(() => console.log('Herinnering geregistreerd'))
