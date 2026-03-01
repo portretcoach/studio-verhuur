@@ -15,6 +15,18 @@ const STORAGE_KEYS = {
 // Google Calendar Sync URL (Apps Script Web App)
 const CALENDAR_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzZFjfuhYaeazpYi9ALgdFsFmedwTPpAg53oPnW-s3h_yqWSX5XTRMreIoqZrG0JzYUSw/exec';
 
+// Dashboard Database API (Google Sheets backend)
+const DASHBOARD_API_URL = 'https://script.google.com/macros/s/AKfycbxBXl1VyrL6WUPqyLh_WI_WT8hz7q1B-QOZxFgdLGAe9wsyuR3-my3dOImyQpByLmFQ/exec';
+
+// Mapping: localStorage key → API collection naam
+const API_COLLECTIONS = {
+    'sv_users': 'Users',
+    'sv_availability': 'Availability',
+    'sv_bookings': 'Bookings',
+    'sv_strippenkaarten': 'Strippenkaarten',
+    'sv_vaste_huur': 'VasteHuur'
+};
+
 // Fotoshoot instellingen
 const FOTOSHOOT_DURATION = 120; // minuten
 const FOTOSHOOT_BUFFER = 30;   // minuten buffer na elke sessie
@@ -43,6 +55,23 @@ function loadObj(key) {
 
 function save(key, data) {
     localStorage.setItem(key, JSON.stringify(data));
+    // Als het een API-collectie is, ook naar Google Sheets sturen
+    const collection = API_COLLECTIONS[key];
+    if (collection) {
+        saveToAPI(collection, data);
+    }
+}
+
+async function saveToAPI(collection, data) {
+    try {
+        await fetch(DASHBOARD_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'saveCollection', collection, data })
+        });
+    } catch (err) {
+        console.warn('API save mislukt voor', collection, err);
+    }
 }
 
 function genId() {
@@ -283,17 +312,45 @@ function seedDefaultAdmin() {
             role: 'admin',
             naam: 'Beheerder'
         }];
-        save(STORAGE_KEYS.users, u);
+        localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(u));
     }
     return u;
 }
 
-function initAuth() {
-    users = seedDefaultAdmin();
-    availability = loadMap(STORAGE_KEYS.availability);
-    bookings = load(STORAGE_KEYS.bookings);
-    strippenkaarten = load(STORAGE_KEYS.strippenkaarten);
-    vasteHuur = load(STORAGE_KEYS.vasteHuur);
+async function initAuth() {
+    // Probeer data op te halen van Google Sheets API
+    try {
+        showToast('Data laden...');
+        const response = await fetch(DASHBOARD_API_URL + '?action=getData');
+        const data = await response.json();
+
+        if (data.success) {
+            users = data.users.length > 0 ? data.users : seedDefaultAdmin();
+            availability = data.availability || {};
+            bookings = data.bookings || [];
+            strippenkaarten = data.strippenkaarten || [];
+            vasteHuur = data.vasteHuur || [];
+
+            // Cache lokaal voor snelle toegang
+            localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(users));
+            localStorage.setItem(STORAGE_KEYS.availability, JSON.stringify(availability));
+            localStorage.setItem(STORAGE_KEYS.bookings, JSON.stringify(bookings));
+            localStorage.setItem(STORAGE_KEYS.strippenkaarten, JSON.stringify(strippenkaarten));
+            localStorage.setItem(STORAGE_KEYS.vasteHuur, JSON.stringify(vasteHuur));
+
+            console.log('Data geladen van API:', users.length, 'users,', Object.keys(availability).length, 'dagen');
+        } else {
+            throw new Error('API response niet succesvol');
+        }
+    } catch (err) {
+        console.warn('API laden mislukt, fallback naar localStorage:', err);
+        // Fallback: gebruik lokale cache
+        users = seedDefaultAdmin();
+        availability = loadMap(STORAGE_KEYS.availability);
+        bookings = load(STORAGE_KEYS.bookings);
+        strippenkaarten = load(STORAGE_KEYS.strippenkaarten);
+        vasteHuur = load(STORAGE_KEYS.vasteHuur);
+    }
 
     checkExpiredCards();
 
@@ -1174,7 +1231,7 @@ function signContract() {
 // ============================================
 // 13. EVENT LISTENERS
 // ============================================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Auth
     document.getElementById('login-form').addEventListener('submit', handleLogin);
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
@@ -1237,6 +1294,6 @@ document.addEventListener('DOMContentLoaded', () => {
         signBtn.addEventListener('click', signContract);
     }
 
-    // Init
-    initAuth();
+    // Init — haal data op van Google Sheets API
+    await initAuth();
 });
