@@ -196,9 +196,10 @@ function applyFotoshootBeschikbaarheid() {
     let avail = loadMap(STORAGE_KEYS.availability);
     let changed = false;
 
-    // Verwijder oude fotoshoot entries die niet meer in slots staan
+    // Verwijder alle "check" entries die niet meer in fotoshoot slots staan
+    // (inclusief oude Calendly-data die niet meer relevant is)
     for (const dateStr in avail) {
-        if (avail[dateStr].note && avail[dateStr].note.startsWith('Fotoshoot') && !fotoshootSlots[dateStr]) {
+        if (avail[dateStr].status === 'check' && !avail[dateStr].bookedBy && !fotoshootSlots[dateStr]) {
             delete avail[dateStr];
             changed = true;
         }
