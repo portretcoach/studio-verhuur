@@ -27,6 +27,9 @@ const API_COLLECTIONS = {
     'sv_vaste_huur': 'VasteHuur'
 };
 
+// Fotoshoot API (Google Sheets backend — zelfde als fotoshoot.js)
+const FOTOSHOOT_API_URL = 'https://script.google.com/macros/s/AKfycbyaqHCzaUpebOEZovD8DMpWoOYSmtmEIQdPF8VmWQMvYAwAxvw1ZGkLJcfKqvDNY-gGoQ/exec';
+
 // Fotoshoot instellingen
 const FOTOSHOOT_DURATION = 120; // minuten
 const FOTOSHOOT_BUFFER = 30;   // minuten buffer na elke sessie
@@ -218,15 +221,25 @@ function applyVasteBezetting() {
 let fotoshootSlots = {};
 let fotoshootBookings = [];
 
-function applyFotoshootBeschikbaarheid() {
-    fotoshootSlots = loadMap(STORAGE_KEYS.fotoshootSlots);
-    fotoshootBookings = load(STORAGE_KEYS.fotoshootBookings);
+async function applyFotoshootBeschikbaarheid() {
+    try {
+        const response = await fetch(FOTOSHOOT_API_URL + '?action=getData');
+        const data = await response.json();
+        if (!data.success) {
+            console.warn('Fotoshoot API fout:', data);
+            return;
+        }
+        fotoshootSlots = data.slots || {};
+        fotoshootBookings = data.bookings || [];
+    } catch (err) {
+        console.error('Fotoshoot API niet bereikbaar:', err);
+        return;
+    }
 
     let avail = loadMap(STORAGE_KEYS.availability);
     let changed = false;
 
     // Verwijder alle "check" entries die niet meer in fotoshoot slots staan
-    // (inclusief oude Calendly-data die niet meer relevant is)
     for (const dateStr in avail) {
         if (avail[dateStr].status === 'check' && !avail[dateStr].bookedBy && !fotoshootSlots[dateStr]) {
             delete avail[dateStr];
@@ -256,6 +269,7 @@ function applyFotoshootBeschikbaarheid() {
     if (changed) {
         save(STORAGE_KEYS.availability, avail);
         availability = avail;
+        renderCalendar();
     }
 }
 
@@ -278,11 +292,12 @@ function generateTimeSlots(startTime, endTime) {
 
 // Welke tijdslots zijn nog beschikbaar (niet geboekt)?
 function getAvailableFotoshootTimes(dateStr, slot) {
-    if (!slot) return [];
+    if (!slot || !slot.startTime || !slot.endTime) return [];
+    const allTimes = generateTimeSlots(slot.startTime, slot.endTime);
     const bookedTimes = fotoshootBookings
         .filter(b => b.date === dateStr)
         .map(b => b.time);
-    return slot.times.filter(t => !bookedTimes.includes(t));
+    return allTimes.filter(t => !bookedTimes.includes(t));
 }
 
 // ============================================
