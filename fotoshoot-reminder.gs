@@ -1,72 +1,269 @@
 /**
- * FOTOSHOOT HERINNERING + ADMIN NOTIFICATIE — Google Apps Script
+ * FOTOSHOOT BOEKINGSSYSTEEM — Google Apps Script API
  *
- * Dit script ontvangt boekingsdata van de fotoshoot-website,
- * slaat deze op in een Google Sheet, stuurt 48 uur voor
- * de fotoshoot een herinneringsmail, stuurt een admin-notificatie
- * bij nieuwe boekingen, en maakt een Google Calendar event aan.
+ * Centrale backend voor het fotoshoot boekingssysteem.
+ * Google Sheets dient als database, dit script als API.
  *
- * SETUP:
- * 1. Maak een nieuw Google Apps Script project aan (script.google.com)
- * 2. Plak deze code in Code.gs
- * 3. Maak een Google Sheet aan en kopieer het Sheet ID (uit de URL)
- * 4. Vul het SHEET_ID hieronder in
- * 5. Deploy als Web App (Execute as: Me, Access: Anyone)
- * 6. Kopieer de Web App URL en plak in fotoshoot.js (REMINDER_SCRIPT_URL)
- * 7. Voeg een dagelijkse trigger toe:
- *    - Bewerk → Triggers → Trigger toevoegen
- *    - Functie: sendReminders
- *    - Type: Tijdgestuurd → Dagelijks → 08:00-09:00
+ * ENDPOINTS:
+ * GET  ?action=getData              → alle slots + boekingen ophalen
+ * POST action=register              → boeking aanmaken/updaten
+ * POST action=addSlot               → beschikbare dag toevoegen (admin)
+ * POST action=removeSlot            → beschikbare dag verwijderen (admin)
+ * POST action=cancelBooking         → boeking annuleren
+ *
+ * SHEETS:
+ * - "Boekingen"       → alle fotoshoot boekingen
+ * - "Beschikbaarheid" → beschikbare data + tijdvensters
  *
  * JOUW GEGEVENS:
  */
 const SHEET_ID = '1khHoZRvQpgFQTeN0UveKWSs6lfTjqoObB9ooigWhU2s';
-const SHEET_NAME = 'Boekingen';
+const BOOKINGS_SHEET = 'Boekingen';
+const SLOTS_SHEET = 'Beschikbaarheid';
 const SENDER_NAME = 'Iris van \'t Riet Fotografie';
+const DEFAULT_PIN = '1234';
+
+// ============================================
+// WEB APP ENDPOINTS
+// ============================================
 
 /**
- * Web App endpoint — ontvangt boekingsdata via POST
+ * GET endpoint — data ophalen
  */
-function doPost(e) {
+function doGet(e) {
   try {
-    const data = JSON.parse(e.postData.contents);
+    var action = (e && e.parameter && e.parameter.action) || 'status';
 
-    if (data.action === 'register') {
-      registerBooking(data);
-      return ContentService
-        .createTextOutput(JSON.stringify({ success: true }))
-        .setMimeType(ContentService.MimeType.JSON);
+    if (action === 'getData') {
+      return jsonResponse(getAllData());
     }
 
-    return ContentService
-      .createTextOutput(JSON.stringify({ success: false, error: 'Onbekende actie' }))
-      .setMimeType(ContentService.MimeType.JSON);
-
+    return jsonResponse({ status: 'ok' });
   } catch (err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ success: false, error: err.message }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return jsonResponse({ success: false, error: err.message });
   }
 }
 
 /**
- * CORS preflight
+ * POST endpoint — acties uitvoeren
  */
-function doGet(e) {
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+
+    switch (data.action) {
+      case 'register':
+        registerBooking(data);
+        return jsonResponse({ success: true });
+
+      case 'addSlot':
+        if (!validatePin(data.pin)) {
+          return jsonResponse({ success: false, error: 'Ongeldige PIN' });
+        }
+        addSlot(data.date, data.startTime, data.endTime);
+        return jsonResponse({ success: true });
+
+      case 'removeSlot':
+        if (!validatePin(data.pin)) {
+          return jsonResponse({ success: false, error: 'Ongeldige PIN' });
+        }
+        removeSlot(data.date);
+        return jsonResponse({ success: true });
+
+      case 'cancelBooking':
+        cancelBookingInSheet(data.code);
+        return jsonResponse({ success: true });
+
+      case 'changePin':
+        if (!validatePin(data.currentPin)) {
+          return jsonResponse({ success: false, error: 'Huidige PIN is onjuist' });
+        }
+        setPin(data.newPin);
+        return jsonResponse({ success: true });
+
+      default:
+        return jsonResponse({ success: false, error: 'Onbekende actie' });
+    }
+
+  } catch (err) {
+    return jsonResponse({ success: false, error: err.message });
+  }
+}
+
+/**
+ * JSON response helper
+ */
+function jsonResponse(obj) {
   return ContentService
-    .createTextOutput(JSON.stringify({ status: 'ok' }))
+    .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
+// ============================================
+// DATA OPHALEN
+// ============================================
+
+/**
+ * Haal alle slots en boekingen op — gebruikt door GET ?action=getData
+ */
+function getAllData() {
+  var slots = getAllSlots();
+  var bookings = getAllBookings();
+
+  return {
+    success: true,
+    slots: slots,
+    bookings: bookings
+  };
+}
+
+/**
+ * Lees alle beschikbare slots uit de Beschikbaarheid sheet
+ * Retourneert: { "2026-03-16": { startTime: "12:00", endTime: "18:30" }, ... }
+ */
+function getAllSlots() {
+  var sheet = getOrCreateSlotsSheet();
+  var rows = sheet.getDataRange().getValues();
+  var slots = {};
+
+  for (var i = 1; i < rows.length; i++) {
+    var date = rows[i][0];
+    var startTime = rows[i][1];
+    var endTime = rows[i][2];
+
+    if (!date) continue;
+
+    // Datum normaliseren (kan Date object zijn vanuit Sheet)
+    if (date instanceof Date) {
+      date = Utilities.formatDate(date, 'Europe/Amsterdam', 'yyyy-MM-dd');
+    }
+    // Tijd normaliseren (kan Date object zijn vanuit Sheet)
+    if (startTime instanceof Date) {
+      startTime = Utilities.formatDate(startTime, 'Europe/Amsterdam', 'HH:mm');
+    }
+    if (endTime instanceof Date) {
+      endTime = Utilities.formatDate(endTime, 'Europe/Amsterdam', 'HH:mm');
+    }
+
+    // Zorg dat tijd strings altijd HH:MM formaat zijn
+    startTime = normalizeTime(String(startTime));
+    endTime = normalizeTime(String(endTime));
+
+    slots[String(date)] = {
+      startTime: startTime,
+      endTime: endTime
+    };
+  }
+
+  return slots;
+}
+
+/**
+ * Lees alle boekingen uit de Boekingen sheet
+ * Retourneert array met relevante velden voor de frontend
+ */
+function getAllBookings() {
+  var sheet = getOrCreateBookingsSheet();
+  var rows = sheet.getDataRange().getValues();
+  var bookings = [];
+
+  for (var i = 1; i < rows.length; i++) {
+    var code = rows[i][0];
+    if (!code) continue;
+
+    var date = rows[i][3];
+    if (date instanceof Date) {
+      date = Utilities.formatDate(date, 'Europe/Amsterdam', 'yyyy-MM-dd');
+    }
+
+    bookings.push({
+      code: String(code),
+      name: String(rows[i][1]),
+      email: String(rows[i][2]),
+      date: String(date),
+      time: normalizeTime(String(rows[i][4])),
+      phone: String(rows[i][7] || ''),
+      remark: String(rows[i][8] || '')
+    });
+  }
+
+  return bookings;
+}
+
+/**
+ * Normaliseer tijd naar HH:MM formaat
+ */
+function normalizeTime(time) {
+  if (!time) return '';
+  // Verwijder seconden als aanwezig (12:00:00 → 12:00)
+  var parts = time.split(':');
+  if (parts.length >= 2) {
+    return parts[0].padStart(2, '0') + ':' + parts[1].padStart(2, '0');
+  }
+  return time;
+}
+
+// ============================================
+// BESCHIKBAARHEID (SLOTS) BEHEER
+// ============================================
+
+/**
+ * Voeg een beschikbare dag toe
+ */
+function addSlot(date, startTime, endTime) {
+  var sheet = getOrCreateSlotsSheet();
+
+  // Check of datum al bestaat → update
+  var rows = sheet.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    var existingDate = rows[i][0];
+    if (existingDate instanceof Date) {
+      existingDate = Utilities.formatDate(existingDate, 'Europe/Amsterdam', 'yyyy-MM-dd');
+    }
+    if (String(existingDate) === String(date)) {
+      // Update bestaande rij
+      sheet.getRange(i + 1, 2).setValue(startTime);
+      sheet.getRange(i + 1, 3).setValue(endTime);
+      return;
+    }
+  }
+
+  // Nieuwe rij toevoegen
+  sheet.appendRow([date, startTime, endTime]);
+}
+
+/**
+ * Verwijder een beschikbare dag
+ */
+function removeSlot(date) {
+  var sheet = getOrCreateSlotsSheet();
+  var rows = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < rows.length; i++) {
+    var existingDate = rows[i][0];
+    if (existingDate instanceof Date) {
+      existingDate = Utilities.formatDate(existingDate, 'Europe/Amsterdam', 'yyyy-MM-dd');
+    }
+    if (String(existingDate) === String(date)) {
+      sheet.deleteRow(i + 1);
+      return;
+    }
+  }
+}
+
+// ============================================
+// BOEKINGEN BEHEER
+// ============================================
 
 /**
  * Sla boeking op in Google Sheet + stuur admin notificatie + maak agenda event
  */
 function registerBooking(data) {
-  const sheet = getOrCreateSheet();
+  var sheet = getOrCreateBookingsSheet();
 
-  // Check of boeking al bestaat (zelfde code) → update
-  const rows = sheet.getDataRange().getValues();
-  for (let i = 1; i < rows.length; i++) {
+  // Check of boeking al bestaat (zelfde code) → update (verzetting)
+  var rows = sheet.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
     if (rows[i][0] === data.code) {
       // Update bestaande rij (10 kolommen)
       sheet.getRange(i + 1, 1, 1, 10).setValues([[
@@ -81,7 +278,6 @@ function registerBooking(data) {
         data.remark || '',
         'nee'
       ]]);
-      // Ook bij verzetting: admin notificatie + agenda event
       sendAdminNotification(data, true);
       createCalendarEvent(data);
       return;
@@ -102,20 +298,38 @@ function registerBooking(data) {
     'nee'
   ]);
 
-  // Admin notificatie + agenda event
   sendAdminNotification(data, false);
   createCalendarEvent(data);
 }
 
 /**
- * Sheet ophalen of aanmaken met headers (10 kolommen)
+ * Annuleer een boeking (verwijder rij uit sheet)
  */
-function getOrCreateSheet() {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
-  let sheet = ss.getSheetByName(SHEET_NAME);
+function cancelBookingInSheet(code) {
+  var sheet = getOrCreateBookingsSheet();
+  var rows = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(code)) {
+      sheet.deleteRow(i + 1);
+      return;
+    }
+  }
+}
+
+// ============================================
+// SHEETS AANMAKEN/OPHALEN
+// ============================================
+
+/**
+ * Boekingen sheet ophalen of aanmaken
+ */
+function getOrCreateBookingsSheet() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(BOOKINGS_SHEET);
 
   if (!sheet) {
-    sheet = ss.insertSheet(SHEET_NAME);
+    sheet = ss.insertSheet(BOOKINGS_SHEET);
     sheet.appendRow([
       'Code', 'Naam', 'E-mail', 'Datum', 'Starttijd',
       'Eindtijd', 'Personen', 'Telefoon', 'Opmerking', 'Herinnering verstuurd'
@@ -127,54 +341,89 @@ function getOrCreateSheet() {
 }
 
 /**
- * Eenmalige migratie: voeg Telefoon en Opmerking kolommen toe
- * aan bestaande sheet (draai handmatig vanuit editor)
+ * Beschikbaarheid sheet ophalen of aanmaken
  */
-function migrateSheetColumns() {
-  const sheet = getOrCreateSheet();
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+function getOrCreateSlotsSheet() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(SLOTS_SHEET);
 
-  // Check of migratie nodig is (oud formaat: 8 kolommen met 'Herinnering verstuurd' op kolom 8)
-  if (headers.length === 8 && headers[7] === 'Herinnering verstuurd') {
-    // Voeg twee kolommen in vóór 'Herinnering verstuurd'
-    sheet.insertColumnsBefore(8, 2);
-    sheet.getRange(1, 8).setValue('Telefoon').setFontWeight('bold');
-    sheet.getRange(1, 9).setValue('Opmerking').setFontWeight('bold');
-    Logger.log('Kolommen Telefoon en Opmerking toegevoegd');
-  } else {
-    Logger.log('Migratie niet nodig — kolommen bestaan al of sheet is nieuw');
+  if (!sheet) {
+    sheet = ss.insertSheet(SLOTS_SHEET);
+    sheet.appendRow(['Datum', 'Starttijd', 'Eindtijd']);
+    sheet.getRange(1, 1, 1, 3).setFontWeight('bold');
   }
+
+  return sheet;
 }
+
+// ============================================
+// PIN VALIDATIE
+// ============================================
+
+/**
+ * Valideer admin PIN tegen opgeslagen waarde
+ */
+function validatePin(pin) {
+  var stored = getPin();
+  return String(pin) === String(stored);
+}
+
+/**
+ * Haal huidige PIN op uit Script Properties
+ */
+function getPin() {
+  var props = PropertiesService.getScriptProperties();
+  var pin = props.getProperty('admin_pin');
+  if (!pin) {
+    // Stel default PIN in bij eerste gebruik
+    props.setProperty('admin_pin', DEFAULT_PIN);
+    return DEFAULT_PIN;
+  }
+  return pin;
+}
+
+/**
+ * Sla nieuwe PIN op in Script Properties
+ */
+function setPin(newPin) {
+  PropertiesService.getScriptProperties().setProperty('admin_pin', String(newPin));
+}
+
+// ============================================
+// HERINNERINGEN
+// ============================================
 
 /**
  * Verstuur herinneringsmails voor boekingen over 48 uur
  * (wordt dagelijks aangeroepen via trigger)
  */
 function sendReminders() {
-  const sheet = getOrCreateSheet();
-  const rows = sheet.getDataRange().getValues();
+  var sheet = getOrCreateBookingsSheet();
+  var rows = sheet.getDataRange().getValues();
 
-  const now = new Date();
-  const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+  var now = new Date();
+  var in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
-  // Datumformat: YYYY-MM-DD
-  const targetDate = Utilities.formatDate(in48h, 'Europe/Amsterdam', 'yyyy-MM-dd');
-  const today = Utilities.formatDate(now, 'Europe/Amsterdam', 'yyyy-MM-dd');
+  var targetDate = Utilities.formatDate(in48h, 'Europe/Amsterdam', 'yyyy-MM-dd');
+  var today = Utilities.formatDate(now, 'Europe/Amsterdam', 'yyyy-MM-dd');
 
-  for (let i = 1; i < rows.length; i++) {
-    const [code, name, email, date, startTime, endTime, persons, phone, remark, reminderSent] = rows[i];
+  for (var i = 1; i < rows.length; i++) {
+    var code = rows[i][0];
+    var name = rows[i][1];
+    var email = rows[i][2];
+    var date = rows[i][3];
+    var startTime = rows[i][4];
+    var reminderSent = rows[i][9];
 
-    // Skip als herinnering al verstuurd
+    if (date instanceof Date) {
+      date = Utilities.formatDate(date, 'Europe/Amsterdam', 'yyyy-MM-dd');
+    }
+
     if (reminderSent === 'ja') continue;
-
-    // Skip als datum al voorbij is
     if (date < today) continue;
 
-    // Stuur herinnering als de boeking over ~48 uur is
-    if (date === targetDate) {
-      sendReminderEmail(name, email, date, startTime, endTime, persons, code);
-
-      // Markeer als verstuurd (kolom 10)
+    if (String(date) === targetDate) {
+      sendReminderEmail(name, email, date, startTime, code);
       sheet.getRange(i + 1, 10).setValue('ja');
     }
   }
@@ -183,12 +432,11 @@ function sendReminders() {
 /**
  * Verstuur een herinneringsmail naar de klant
  */
-function sendReminderEmail(name, email, date, startTime, endTime, persons, code) {
-  const dateNL = formatDateNL(date);
+function sendReminderEmail(name, email, date, startTime, code) {
+  var dateNL = formatDateNL(date);
+  var subject = 'Herinnering: je fotoshoot op ' + dateNL;
 
-  const subject = 'Herinnering: je fotoshoot op ' + dateNL;
-
-  const htmlBody = '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; max-width: 500px; margin: 0 auto;">'
+  var htmlBody = '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; max-width: 500px; margin: 0 auto;">'
     + '<div style="background: #34535b; color: white; padding: 2rem; text-align: center; border-radius: 10px 10px 0 0;">'
     + '<h1 style="font-family: \'Palatino Linotype\', Georgia, serif; font-weight: 400; margin: 0;">Herinnering</h1>'
     + '<p style="color: #dbb458; margin: 0.25rem 0 0;">Fotoshoot bij Iris van \'t Riet</p>'
@@ -221,9 +469,6 @@ function sendReminderEmail(name, email, date, startTime, endTime, persons, code)
 // ADMIN NOTIFICATIE
 // ============================================
 
-/**
- * Stuur een notificatie-mail naar de admin bij een nieuwe boeking
- */
 function sendAdminNotification(data, isReschedule) {
   var adminEmail;
   try {
@@ -277,22 +522,16 @@ function sendAdminNotification(data, isReschedule) {
 // GOOGLE CALENDAR EVENT
 // ============================================
 
-/**
- * Maak een Google Calendar event aan voor de fotoshoot
- */
 function createCalendarEvent(data) {
   try {
     var calendar = CalendarApp.getDefaultCalendar();
 
-    // Parse datum en tijd — endTime is de blokkeerperiode (2,5 uur)
     var startDateTime = new Date(data.date + 'T' + data.time + ':00');
-    var endTime = data.endTime || data.time; // fallback als endTime ontbreekt
+    var endTime = data.endTime || data.time;
     var endDateTime = new Date(data.date + 'T' + endTime + ':00');
 
-    // Titel: klantnaam + boekingscode
     var title = 'Fotoshoot: ' + data.name + ' (' + data.code + ')';
 
-    // Beschrijving met klantdetails
     var description = 'Fotoshoot boeking\n\n'
       + 'Naam: ' + data.name + '\n'
       + 'E-mail: ' + data.email + '\n'
@@ -313,8 +552,9 @@ function createCalendarEvent(data) {
 }
 
 // ============================================
-// HELPER: datum formatteren in het Nederlands
+// HELPERS
 // ============================================
+
 function formatDateNL(dateStr) {
   var dateObj = new Date(dateStr + 'T12:00:00');
   var days = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
@@ -324,12 +564,54 @@ function formatDateNL(dateStr) {
 }
 
 // ============================================
-// TEST FUNCTIES
+// MIGRATIE & TEST FUNCTIES
 // ============================================
 
 /**
+ * Eenmalige migratie: zet slots vanuit een JSON string in de Beschikbaarheid sheet
+ * Draai handmatig vanuit de Apps Script editor
+ */
+function migrateSlots() {
+  var slotsData = {
+    "2026-03-16": {"startTime":"12:00","endTime":"18:30"},
+    "2026-03-29": {"startTime":"11:00","endTime":"17:00"},
+    "2026-03-30": {"startTime":"12:00","endTime":"19:00"},
+    "2026-04-06": {"startTime":"10:00","endTime":"12:00"},
+    "2026-04-08": {"startTime":"11:00","endTime":"17:30"},
+    "2026-04-13": {"startTime":"10:00","endTime":"17:30"},
+    "2026-04-19": {"startTime":"10:00","endTime":"17:00"},
+    "2026-04-20": {"startTime":"10:00","endTime":"17:30"},
+    "2026-04-23": {"startTime":"11:00","endTime":"17:30"},
+    "2026-04-26": {"startTime":"09:00","endTime":"18:00"},
+    "2026-04-27": {"startTime":"10:00","endTime":"17:30"},
+    "2026-05-04": {"startTime":"10:00","endTime":"17:30"},
+    "2026-05-10": {"startTime":"10:00","endTime":"17:30"},
+    "2026-05-11": {"startTime":"10:00","endTime":"17:30"},
+    "2026-05-17": {"startTime":"10:00","endTime":"17:30"},
+    "2026-05-24": {"startTime":"09:00","endTime":"18:00"}
+  };
+
+  var dates = Object.keys(slotsData);
+  for (var i = 0; i < dates.length; i++) {
+    var d = dates[i];
+    addSlot(d, slotsData[d].startTime, slotsData[d].endTime);
+  }
+
+  Logger.log(dates.length + ' slots gemigreerd naar Beschikbaarheid sheet');
+}
+
+/**
+ * Test: haal alle data op
+ */
+function testGetAllData() {
+  var data = getAllData();
+  Logger.log('Slots: ' + Object.keys(data.slots).length);
+  Logger.log('Bookings: ' + data.bookings.length);
+  Logger.log(JSON.stringify(data).substring(0, 500));
+}
+
+/**
  * Test: admin notificatie + calendar event
- * Draai handmatig vanuit Apps Script editor
  */
 function testAdminNotificationAndCalendar() {
   var testData = {
@@ -338,8 +620,7 @@ function testAdminNotificationAndCalendar() {
     email: 'test@example.com',
     date: '2026-03-15',
     time: '10:00',
-    endTime: '12:00',
-    persons: 2,
+    endTime: '12:30',
     phone: '06-12345678',
     remark: 'Dit is een test boeking'
   };

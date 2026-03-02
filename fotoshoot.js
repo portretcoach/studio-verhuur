@@ -1,11 +1,6 @@
 // ============================================
 // FOTOSHOOT BOEKINGSPAGINA — Publiek
 // ============================================
-const STORAGE_KEYS = {
-    fotoshootSlots: 'sv_fotoshoot_slots',
-    fotoshootBookings: 'sv_fotoshoot_bookings',
-};
-
 const BOOKING_BLOCK_MINUTES = 150; // 2,5 uur blokkering na elke boeking
 const TIME_STEP_MINUTES = 30;     // tijdstappen van 30 minuten
 const MAX_BOOKINGS_PER_DAY = 2;   // maximaal aantal boekingen per dag
@@ -18,46 +13,30 @@ const MONTHS_NL = [
 const DAYS_NL = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
 
 // ============================================
-// EmailJS configuratie — vul je eigen gegevens in
+// EmailJS configuratie
 // ============================================
-const EMAILJS_PUBLIC_KEY = 'RtX6RSZRrTCmSOoDw';       // EmailJS Public Key
-const EMAILJS_SERVICE_ID = 'service_4nkxqgj';       // EmailJS Service ID
-const EMAILJS_TEMPLATE_CONFIRM = 'template_dk1f8ji'; // Template ID bevestiging
-const EMAILJS_TEMPLATE_RESCHEDULE = 'template_3cjid5i';   // Template ID verzet-bevestiging
+const EMAILJS_PUBLIC_KEY = 'RtX6RSZRrTCmSOoDw';
+const EMAILJS_SERVICE_ID = 'service_4nkxqgj';
+const EMAILJS_TEMPLATE_CONFIRM = 'template_dk1f8ji';
+const EMAILJS_TEMPLATE_RESCHEDULE = 'template_3cjid5i';
 
-// Google Apps Script URL voor herinneringen
-const REMINDER_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyaqHCzaUpebOEZovD8DMpWoOYSmtmEIQdPF8VmWQMvYAwAxvw1ZGkLJcfKqvDNY-gGoQ/exec';
+// Google Apps Script API URL (centrale backend)
+const API_URL = 'https://script.google.com/macros/s/AKfycbyaqHCzaUpebOEZovD8DMpWoOYSmtmEIQdPF8VmWQMvYAwAxvw1ZGkLJcfKqvDNY-gGoQ/exec';
 
 // ============================================
 // HELPERS
 // ============================================
-function load(key) {
-    try { return JSON.parse(localStorage.getItem(key)) || []; }
-    catch { return []; }
-}
-
-function loadMap(key) {
-    try { return JSON.parse(localStorage.getItem(key)) || {}; }
-    catch { return {}; }
-}
-
-function save(key, data) {
-    localStorage.setItem(key, JSON.stringify(data));
-}
-
 function genId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
 function genBookingCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // geen I/O/0/1 (verwarring voorkomen)
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = 'FS-';
     for (let i = 0; i < 4; i++) {
         code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    // Check of code al bestaat
-    const existing = load(STORAGE_KEYS.fotoshootBookings);
-    if (existing.some(b => b.code === code)) return genBookingCode();
+    if (fotoshootBookings.some(b => b.code === code)) return genBookingCode();
     return code;
 }
 
@@ -92,6 +71,52 @@ function formatBlockEndTime(time) {
 }
 
 // ============================================
+// API COMMUNICATIE
+// ============================================
+
+/**
+ * Haal alle data op van de server (slots + boekingen)
+ */
+async function loadDataFromServer() {
+    try {
+        const response = await fetch(API_URL + '?action=getData');
+        const data = await response.json();
+
+        if (data.success) {
+            fotoshootSlots = data.slots || {};
+            fotoshootBookings = data.bookings || [];
+            return true;
+        } else {
+            console.error('Server fout:', data.error);
+            return false;
+        }
+    } catch (err) {
+        console.error('Kan data niet ophalen:', err);
+        return false;
+    }
+}
+
+/**
+ * POST naar de server (fire-and-forget via no-cors als fallback)
+ */
+function apiPost(data) {
+    return fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .catch(err => {
+        console.error('API POST fout:', err);
+        // Fallback: probeer met no-cors (response niet leesbaar maar request komt wel aan)
+        return fetch(API_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify(data)
+        }).then(() => ({ success: true, fallback: true }));
+    });
+}
+
+// ============================================
 // STATE
 // ============================================
 let fotoshootSlots = {};
@@ -100,7 +125,19 @@ let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 let selectedDate = null;
 let selectedTime = null;
-let rescheduleBooking = null; // als we een boeking aan het verzetten zijn
+let rescheduleBooking = null;
+let isLoading = false;
+
+// ============================================
+// LOADING STATE
+// ============================================
+function showLoading(show) {
+    isLoading = show;
+    const loader = document.getElementById('loading-overlay');
+    if (loader) {
+        loader.classList.toggle('hidden', !show);
+    }
+}
 
 // ============================================
 // CALENDAR
@@ -109,17 +146,14 @@ function getAvailableTimes(dateStr) {
     const slot = fotoshootSlots[dateStr];
     if (!slot) return [];
     const dayBookings = fotoshootBookings.filter(b => b.date === dateStr);
-    // Max boekingen per dag bereikt → dag is vol
     if (dayBookings.length >= MAX_BOOKINGS_PER_DAY) return [];
 
-    // Genereer alle tijden in 30-min stappen binnen het beschikbare venster
     const startMin = timeToMinutes(slot.startTime);
     const endMin = timeToMinutes(slot.endTime);
     const bookedMinutes = dayBookings.map(b => timeToMinutes(b.time));
 
     const available = [];
     for (let m = startMin; m < endMin; m += TIME_STEP_MINUTES) {
-        // Check of dit tijdstip binnen een geblokkeerd bereik valt
         const isBlocked = bookedMinutes.some(bm => m >= bm && m < bm + BOOKING_BLOCK_MINUTES);
         if (!isBlocked) available.push(minutesToTime(m));
     }
@@ -139,7 +173,6 @@ function renderCalendar() {
     const daysInPrevMonth = new Date(currentYear, currentMonth, 0).getDate();
     const today = todayStr();
 
-    // Vorige maand padding
     for (let i = startWeekday - 1; i >= 0; i--) {
         const el = document.createElement('div');
         el.className = 'cal-day outside';
@@ -147,7 +180,6 @@ function renderCalendar() {
         grid.appendChild(el);
     }
 
-    // Dagen van de maand
     for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = formatDateStr(currentYear, currentMonth, d);
         const isPast = dateStr < today;
@@ -171,7 +203,6 @@ function renderCalendar() {
         grid.appendChild(el);
     }
 
-    // Volgende maand padding
     const totalCells = startWeekday + daysInMonth;
     const remainder = totalCells % 7;
     if (remainder > 0) {
@@ -217,14 +248,11 @@ function showForm(dateStr, time) {
     document.getElementById('booking-summary-date').textContent = formatDateNL(dateStr);
     document.getElementById('booking-summary-time').textContent = `om ${time}`;
 
-    // Als we aan het verzetten zijn, vul de naam/email/etc alvast in
     if (rescheduleBooking) {
         document.getElementById('f-name').value = rescheduleBooking.name;
         document.getElementById('f-email').value = rescheduleBooking.email;
         document.getElementById('f-phone').value = rescheduleBooking.phone;
         document.getElementById('f-remark').value = rescheduleBooking.remark || '';
-
-        // Toon verzet-banner
         document.getElementById('reschedule-banner').classList.remove('hidden');
     } else {
         document.getElementById('reschedule-banner').classList.add('hidden');
@@ -233,7 +261,7 @@ function showForm(dateStr, time) {
     showStep('step-form');
 }
 
-function handleBooking(e) {
+async function handleBooking(e) {
     e.preventDefault();
 
     const name = document.getElementById('f-name').value.trim();
@@ -254,20 +282,20 @@ function handleBooking(e) {
         return;
     }
 
-    // Als we verzetten: oude boeking verwijderen
+    // Als we verzetten: oude boeking info bewaren
     let oldBookingInfo = null;
     if (rescheduleBooking) {
         oldBookingInfo = {
             date: rescheduleBooking.date,
             time: rescheduleBooking.time
         };
-        fotoshootBookings = fotoshootBookings.filter(b => b.id !== rescheduleBooking.id);
+        // Verwijder oude boeking uit lokale state
+        fotoshootBookings = fotoshootBookings.filter(b => b.code !== rescheduleBooking.code);
     }
 
-    // Nieuwe boeking opslaan
+    // Nieuwe boeking
     const bookingCode = rescheduleBooking ? rescheduleBooking.code : genBookingCode();
     const booking = {
-        id: genId(),
         code: bookingCode,
         date: selectedDate,
         time: selectedTime,
@@ -275,11 +303,10 @@ function handleBooking(e) {
         email,
         phone,
         remark,
-        createdAt: new Date().toISOString()
     };
 
+    // Voeg toe aan lokale state (optimistic update)
     fotoshootBookings.push(booking);
-    save(STORAGE_KEYS.fotoshootBookings, fotoshootBookings);
 
     // Bevestiging tonen
     document.getElementById('confirm-date').textContent = formatDateNL(selectedDate);
@@ -294,10 +321,22 @@ function handleBooking(e) {
         document.getElementById('confirm-subtitle').textContent = 'Je fotoshoot is geboekt op:';
     }
 
-    // E-mails versturen
+    // Verstuur naar server (register = opslaan in Sheet + admin mail + agenda)
+    apiPost({
+        action: 'register',
+        code: booking.code,
+        name: booking.name,
+        email: booking.email,
+        date: booking.date,
+        time: booking.time,
+        endTime: formatBlockEndTime(booking.time),
+        phone: booking.phone,
+        remark: booking.remark || '',
+    });
+
+    // Bevestigingsmail via EmailJS
     const isReschedule = !!rescheduleBooking;
     sendConfirmationEmail(booking, isReschedule, oldBookingInfo);
-    registerReminder(booking);
 
     // Reset state
     rescheduleBooking = null;
@@ -330,7 +369,6 @@ function lookupBooking() {
         return;
     }
 
-    // Toon boekingsdetails
     const container = document.getElementById('lookup-result');
     container.innerHTML = `
         <div class="booking-detail-card">
@@ -368,17 +406,22 @@ function lookupBooking() {
 
 function startReschedule(booking) {
     rescheduleBooking = booking;
-    // Ga naar de kalender om een nieuwe datum te kiezen
     renderCalendar();
     showStep('step-calendar');
     showToast('Kies een nieuwe datum en tijd voor je fotoshoot');
 }
 
-function cancelBooking(booking) {
+async function cancelBooking(booking) {
     if (!confirm('Weet je zeker dat je de fotoshoot wilt annuleren?')) return;
 
-    fotoshootBookings = fotoshootBookings.filter(b => b.id !== booking.id);
-    save(STORAGE_KEYS.fotoshootBookings, fotoshootBookings);
+    // Verwijder uit lokale state
+    fotoshootBookings = fotoshootBookings.filter(b => b.code !== booking.code);
+
+    // Verwijder uit server (Google Sheet)
+    apiPost({
+        action: 'cancelBooking',
+        code: booking.code
+    });
 
     // Toon annuleringsbevestiging
     document.getElementById('lookup-result').innerHTML = `
@@ -389,10 +432,11 @@ function cancelBooking(booking) {
             <button class="btn-primary" id="btn-book-new" style="margin-top:1rem">Nieuwe fotoshoot boeken</button>
         </div>
     `;
-    document.getElementById('btn-book-new').addEventListener('click', () => {
+    document.getElementById('btn-book-new').addEventListener('click', async () => {
         rescheduleBooking = null;
-        fotoshootSlots = loadMap(STORAGE_KEYS.fotoshootSlots);
-        fotoshootBookings = load(STORAGE_KEYS.fotoshootBookings);
+        showLoading(true);
+        await loadDataFromServer();
+        showLoading(false);
         renderCalendar();
         showStep('step-calendar');
     });
@@ -402,14 +446,12 @@ function cancelBooking(booking) {
 // EMAILJS — Bevestigingsmail
 // ============================================
 function sendConfirmationEmail(booking, isReschedule, oldBookingInfo) {
-    // Check of EmailJS geconfigureerd is
     if (EMAILJS_PUBLIC_KEY === 'JOUW_PUBLIC_KEY' || typeof emailjs === 'undefined') {
         console.log('EmailJS niet geconfigureerd, geen mail verstuurd');
         return;
     }
 
     const pageUrl = window.location.href.split('?')[0];
-
     const templateId = isReschedule ? EMAILJS_TEMPLATE_RESCHEDULE : EMAILJS_TEMPLATE_CONFIRM;
 
     const params = {
@@ -422,7 +464,6 @@ function sendConfirmationEmail(booking, isReschedule, oldBookingInfo) {
         page_url: pageUrl,
     };
 
-    // Extra info bij verzetten
     if (isReschedule && oldBookingInfo) {
         params.old_date = formatDateNL(oldBookingInfo.date);
         params.old_time = oldBookingInfo.time;
@@ -431,35 +472,6 @@ function sendConfirmationEmail(booking, isReschedule, oldBookingInfo) {
     emailjs.send(EMAILJS_SERVICE_ID, templateId, params)
         .then(() => console.log('Bevestigingsmail verstuurd'))
         .catch(err => console.error('Mail fout:', err));
-}
-
-// ============================================
-// GOOGLE APPS SCRIPT — Herinnering registreren
-// ============================================
-function registerReminder(booking) {
-    if (REMINDER_SCRIPT_URL === 'JOUW_APPS_SCRIPT_URL') {
-        console.log('Reminder script niet geconfigureerd');
-        return;
-    }
-
-    fetch(REMINDER_SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            action: 'register',
-            code: booking.code,
-            name: booking.name,
-            email: booking.email,
-            date: booking.date,
-            time: booking.time,
-            endTime: formatBlockEndTime(booking.time),
-            phone: booking.phone,
-            remark: booking.remark || '',
-        })
-    })
-    .then(() => console.log('Herinnering geregistreerd'))
-    .catch(err => console.error('Herinnering registratie fout:', err));
 }
 
 // ============================================
@@ -488,13 +500,19 @@ function showToast(message, type = '') {
 // ============================================
 // INIT
 // ============================================
-document.addEventListener('DOMContentLoaded', () => {
-    fotoshootSlots = loadMap(STORAGE_KEYS.fotoshootSlots);
-    fotoshootBookings = load(STORAGE_KEYS.fotoshootBookings);
-
+document.addEventListener('DOMContentLoaded', async () => {
     // EmailJS initialiseren
     if (EMAILJS_PUBLIC_KEY !== 'JOUW_PUBLIC_KEY' && typeof emailjs !== 'undefined') {
         emailjs.init(EMAILJS_PUBLIC_KEY);
+    }
+
+    // Data ophalen van server
+    showLoading(true);
+    const success = await loadDataFromServer();
+    showLoading(false);
+
+    if (!success) {
+        showToast('Kon agenda niet laden. Probeer het later opnieuw.', 'error');
     }
 
     renderCalendar();
@@ -523,10 +541,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('booking-form').addEventListener('submit', handleBooking);
 
     // Nog een boeking
-    document.getElementById('book-another').addEventListener('click', () => {
+    document.getElementById('book-another').addEventListener('click', async () => {
         rescheduleBooking = null;
-        fotoshootSlots = loadMap(STORAGE_KEYS.fotoshootSlots);
-        fotoshootBookings = load(STORAGE_KEYS.fotoshootBookings);
+        showLoading(true);
+        await loadDataFromServer();
+        showLoading(false);
         renderCalendar();
         showStep('step-calendar');
     });

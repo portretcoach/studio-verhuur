@@ -1,14 +1,8 @@
 // ============================================
 // FOTOSHOOT ADMIN — PIN-beveiligd beheer
 // ============================================
-const STORAGE_KEYS = {
-    fotoshootSlots: 'sv_fotoshoot_slots',
-    fotoshootBookings: 'sv_fotoshoot_bookings',
-    fotoshootPin: 'sv_fotoshoot_pin',
-};
-
 const DEFAULT_PIN = '1234';
-const BOOKING_BLOCK_MINUTES = 150; // 2,5 uur blokkering na elke boeking
+const BOOKING_BLOCK_MINUTES = 150;
 
 const MONTHS_NL = [
     'januari', 'februari', 'maart', 'april', 'mei', 'juni',
@@ -16,27 +10,12 @@ const MONTHS_NL = [
 ];
 const DAYS_NL = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
 
+// Google Apps Script API URL (centrale backend)
+const API_URL = 'https://script.google.com/macros/s/AKfycbyaqHCzaUpebOEZovD8DMpWoOYSmtmEIQdPF8VmWQMvYAwAxvw1ZGkLJcfKqvDNY-gGoQ/exec';
+
 // ============================================
 // HELPERS
 // ============================================
-function load(key) {
-    try { return JSON.parse(localStorage.getItem(key)) || []; }
-    catch { return []; }
-}
-
-function loadMap(key) {
-    try { return JSON.parse(localStorage.getItem(key)) || {}; }
-    catch { return {}; }
-}
-
-function save(key, data) {
-    localStorage.setItem(key, JSON.stringify(data));
-}
-
-function genId() {
-    return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
-
 function formatDateStr(y, m, d) {
     return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
@@ -53,42 +32,122 @@ function formatDateNL(dateStr) {
 }
 
 // ============================================
+// API COMMUNICATIE
+// ============================================
+
+/**
+ * Haal alle data op van de server
+ */
+async function loadDataFromServer() {
+    try {
+        const response = await fetch(API_URL + '?action=getData');
+        const data = await response.json();
+
+        if (data.success) {
+            fotoshootSlots = data.slots || {};
+            fotoshootBookings = data.bookings || [];
+            return true;
+        } else {
+            console.error('Server fout:', data.error);
+            return false;
+        }
+    } catch (err) {
+        console.error('Kan data niet ophalen:', err);
+        return false;
+    }
+}
+
+/**
+ * POST naar de server
+ */
+function apiPost(data) {
+    return fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .catch(err => {
+        console.error('API POST fout:', err);
+        return fetch(API_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify(data)
+        }).then(() => ({ success: true, fallback: true }));
+    });
+}
+
+// ============================================
 // STATE
 // ============================================
 let fotoshootSlots = {};
 let fotoshootBookings = [];
+let adminPin = ''; // PIN die admin heeft ingevoerd
+
+// ============================================
+// LOADING STATE
+// ============================================
+function showLoading(show) {
+    const loader = document.getElementById('loading-overlay');
+    if (loader) {
+        loader.classList.toggle('hidden', !show);
+    }
+}
 
 // ============================================
 // PIN LOGIN
 // ============================================
-function getPin() {
-    return localStorage.getItem(STORAGE_KEYS.fotoshootPin) || DEFAULT_PIN;
-}
-
-function handlePinLogin(e) {
+async function handlePinLogin(e) {
     e.preventDefault();
     const input = document.getElementById('pin-input').value;
 
-    if (input === getPin()) {
+    // Bewaar PIN voor admin API calls
+    adminPin = input;
+
+    // Toon loading terwijl we data ophalen
+    document.getElementById('pin-error').classList.add('hidden');
+    showLoading(true);
+
+    const success = await loadDataFromServer();
+    showLoading(false);
+
+    if (success) {
         document.getElementById('login-screen').classList.add('hidden');
         document.getElementById('admin-dashboard').classList.remove('hidden');
-        document.getElementById('pin-error').classList.add('hidden');
-        loadData();
         renderAll();
     } else {
-        document.getElementById('pin-error').classList.remove('hidden');
-        document.getElementById('pin-input').value = '';
-        document.getElementById('pin-input').focus();
+        // Als server niet bereikbaar is, probeer local PIN check
+        const localPin = localStorage.getItem('sv_fotoshoot_pin') || DEFAULT_PIN;
+        if (input === localPin) {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('admin-dashboard').classList.remove('hidden');
+            showToast('Server niet bereikbaar — data kan verouderd zijn', 'error');
+            renderAll();
+        } else {
+            document.getElementById('pin-error').classList.remove('hidden');
+            document.getElementById('pin-input').value = '';
+            document.getElementById('pin-input').focus();
+        }
     }
 }
 
-function handleChangePin() {
+async function handleChangePin() {
     const newPin = document.getElementById('new-pin').value.trim();
     if (!newPin || newPin.length < 4) {
         showToast('PIN moet minimaal 4 tekens zijn', 'error');
         return;
     }
-    localStorage.setItem(STORAGE_KEYS.fotoshootPin, newPin);
+
+    // Update op server
+    const result = await apiPost({
+        action: 'changePin',
+        currentPin: adminPin,
+        newPin: newPin
+    });
+
+    // Update lokaal
+    localStorage.setItem('sv_fotoshoot_pin', newPin);
+    adminPin = newPin;
+
     document.getElementById('new-pin').value = '';
     showToast('PIN gewijzigd', 'success');
 }
@@ -97,31 +156,13 @@ function handleLogout() {
     document.getElementById('admin-dashboard').classList.add('hidden');
     document.getElementById('login-screen').classList.remove('hidden');
     document.getElementById('pin-input').value = '';
-}
-
-// ============================================
-// DATA
-// ============================================
-function loadData() {
-    fotoshootSlots = loadMap(STORAGE_KEYS.fotoshootSlots);
-    fotoshootBookings = load(STORAGE_KEYS.fotoshootBookings);
-}
-
-// ============================================
-// HELPERS — tijd
-// ============================================
-function formatBlockEnd(time) {
-    const [h, m] = time.split(':').map(Number);
-    const endMinutes = h * 60 + m + BOOKING_BLOCK_MINUTES;
-    const endH = Math.floor(endMinutes / 60);
-    const endM = endMinutes % 60;
-    return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+    adminPin = '';
 }
 
 // ============================================
 // ADMIN ACTIONS
 // ============================================
-function addFotoshootDay() {
+async function addFotoshootDay() {
     const dateStr = document.getElementById('fs-date').value;
     const startTime = document.getElementById('fs-start').value;
     const endTime = document.getElementById('fs-end').value;
@@ -131,26 +172,66 @@ function addFotoshootDay() {
     if (dateStr < todayStr()) { showToast('Datum moet in de toekomst liggen', 'error'); return; }
     if (startTime >= endTime) { showToast('Eindtijd moet na starttijd liggen', 'error'); return; }
 
+    // Optimistic update
     fotoshootSlots[dateStr] = { startTime, endTime };
-    save(STORAGE_KEYS.fotoshootSlots, fotoshootSlots);
+    renderAll();
+
+    // Opslaan op server
+    showLoading(true);
+    await apiPost({
+        action: 'addSlot',
+        pin: adminPin,
+        date: dateStr,
+        startTime: startTime,
+        endTime: endTime
+    });
+
+    // Herlaad data van server om in sync te blijven
+    await loadDataFromServer();
+    showLoading(false);
+    renderAll();
 
     document.getElementById('fs-date').value = '';
-    renderAll();
     showToast(`Beschikbaar ${startTime}–${endTime} voor ${formatDateNL(dateStr)}`, 'success');
 }
 
-function removeFotoshootDay(dateStr) {
+async function removeFotoshootDay(dateStr) {
     if (!confirm(`Fotoshoot-dag ${formatDateNL(dateStr)} verwijderen?`)) return;
+
+    // Optimistic update
     delete fotoshootSlots[dateStr];
-    save(STORAGE_KEYS.fotoshootSlots, fotoshootSlots);
+    renderAll();
+
+    // Verwijderen op server
+    showLoading(true);
+    await apiPost({
+        action: 'removeSlot',
+        pin: adminPin,
+        date: dateStr
+    });
+
+    await loadDataFromServer();
+    showLoading(false);
     renderAll();
     showToast('Fotoshoot-dag verwijderd');
 }
 
-function cancelFotoshootBooking(bookingId) {
+async function cancelFotoshootBooking(bookingCode) {
     if (!confirm('Fotoshoot-boeking annuleren?')) return;
-    fotoshootBookings = fotoshootBookings.filter(b => b.id !== bookingId);
-    save(STORAGE_KEYS.fotoshootBookings, fotoshootBookings);
+
+    // Optimistic update
+    fotoshootBookings = fotoshootBookings.filter(b => b.code !== bookingCode);
+    renderAll();
+
+    // Verwijderen op server
+    showLoading(true);
+    await apiPost({
+        action: 'cancelBooking',
+        code: bookingCode
+    });
+
+    await loadDataFromServer();
+    showLoading(false);
     renderAll();
     showToast('Boeking geannuleerd, tijdslot weer beschikbaar');
 }
@@ -219,12 +300,12 @@ function renderBookings() {
                 <strong>${formatDateNL(b.date)} om ${b.time}</strong>
                 <div class="admin-booking-actions">
                     ${b.code ? `<span class="admin-booking-code">${b.code}</span>` : ''}
-                    ${b.date >= todayStr() ? `<button class="btn-danger btn-small" data-cancel="${b.id}">Annuleren</button>` : ''}
+                    ${b.date >= todayStr() ? `<button class="btn-danger btn-small" data-cancel="${b.code}">Annuleren</button>` : ''}
                 </div>
             </div>
             <div class="admin-booking-details">
                 <strong>${b.name}</strong><br>
-                ${b.email} &middot; ${b.phone}
+                ${b.email} &middot; ${b.phone || '-'}
                 ${b.remark ? `<br><em>${b.remark}</em>` : ''}
             </div>
         </div>
