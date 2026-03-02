@@ -20,7 +20,7 @@
 const SHEET_ID = '1khHoZRvQpgFQTeN0UveKWSs6lfTjqoObB9ooigWhU2s';
 const BOOKINGS_SHEET = 'Boekingen';
 const SLOTS_SHEET = 'Beschikbaarheid';
-const SENDER_NAME = 'Iris van \'t Riet Fotografie';
+const SENDER_NAME = 'Studio Iris van \'t Riet';
 const DEFAULT_PIN = '1234';
 
 // ============================================
@@ -439,7 +439,7 @@ function sendReminderEmail(name, email, date, startTime, code) {
   var htmlBody = '<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; max-width: 500px; margin: 0 auto;">'
     + '<div style="background: #34535b; color: white; padding: 2rem; text-align: center; border-radius: 10px 10px 0 0;">'
     + '<h1 style="font-family: \'Palatino Linotype\', Georgia, serif; font-weight: 400; margin: 0;">Herinnering</h1>'
-    + '<p style="color: #dbb458; margin: 0.25rem 0 0;">Fotoshoot bij Iris van \'t Riet</p>'
+    + '<p style="color: #dbb458; margin: 0.25rem 0 0;">Fotoshoot bij Studio Iris van \'t Riet</p>'
     + '</div>'
     + '<div style="background: white; padding: 2rem; border: 1px solid #e0d8cf; border-top: none; border-radius: 0 0 10px 10px;">'
     + '<p>Beste ' + name + ',</p>'
@@ -452,7 +452,7 @@ function sendReminderEmail(name, email, date, startTime, code) {
     + '<p><strong>Locatie:</strong><br>Weg en Bos 22c, Bergschenhoek</p>'
     + '<p style="color: #6b6b6b; font-size: 0.9rem;">Moet je verzetten of annuleren? Gebruik je boekingscode <strong>' + code + '</strong> op de boekingspagina.</p>'
     + '<p>Tot dan!</p>'
-    + '<p>Iris van \'t Riet</p>'
+    + '<p>Studio Iris van \'t Riet</p>'
     + '</div>'
     + '</div>';
 
@@ -524,7 +524,8 @@ function sendAdminNotification(data, isReschedule) {
 
 function createCalendarEvent(data) {
   try {
-    var calendar = CalendarApp.getDefaultCalendar();
+    // Gebruik de studio-agenda (rode agenda)
+    var calendar = CalendarApp.getCalendarById('info@irisvantriet.nl') || CalendarApp.getDefaultCalendar();
 
     var startDateTime = new Date(data.date + 'T' + data.time + ':00');
     var endTime = data.endTime || data.time;
