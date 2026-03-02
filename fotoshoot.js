@@ -253,6 +253,7 @@ function showForm(dateStr, time) {
         document.getElementById('f-email').value = rescheduleBooking.email;
         document.getElementById('f-phone').value = rescheduleBooking.phone;
         document.getElementById('f-remark').value = rescheduleBooking.remark || '';
+        document.getElementById('f-consult').value = rescheduleBooking.consult || '';
         document.getElementById('reschedule-banner').classList.remove('hidden');
     } else {
         document.getElementById('reschedule-banner').classList.add('hidden');
@@ -268,6 +269,7 @@ async function handleBooking(e) {
     const email = document.getElementById('f-email').value.trim();
     const phone = document.getElementById('f-phone').value.trim();
     const remark = document.getElementById('f-remark').value.trim();
+    const consult = document.getElementById('f-consult').value.trim();
 
     if (!name || !email || !phone) {
         showToast('Vul alle verplichte velden in', 'error');
@@ -303,6 +305,7 @@ async function handleBooking(e) {
         email,
         phone,
         remark,
+        consult,
     };
 
     // Voeg toe aan lokale state (optimistic update)
@@ -332,6 +335,7 @@ async function handleBooking(e) {
         endTime: formatBlockEndTime(booking.time),
         phone: booking.phone,
         remark: booking.remark || '',
+        consult: booking.consult || '',
     });
 
     // Bevestigingsmail via EmailJS
@@ -461,6 +465,7 @@ function sendConfirmationEmail(booking, isReschedule, oldBookingInfo) {
         booking_time: booking.time,
         booking_code: booking.code,
         booking_remark: booking.remark || '-',
+        booking_consult: booking.consult || '-',
         page_url: pageUrl,
     };
 

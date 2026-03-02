@@ -307,6 +307,7 @@ function renderBookings() {
                 <strong>${b.name}</strong><br>
                 ${b.email} &middot; ${b.phone || '-'}
                 ${b.remark ? `<br><em>${b.remark}</em>` : ''}
+                ${b.consult ? `<br><small>📞 Consult: ${b.consult}</small>` : ''}
             </div>
         </div>
     `).join('');

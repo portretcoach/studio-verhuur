@@ -183,7 +183,8 @@ function getAllBookings() {
       date: String(date),
       time: normalizeTime(String(rows[i][4])),
       phone: String(rows[i][7] || ''),
-      remark: String(rows[i][8] || '')
+      remark: String(rows[i][8] || ''),
+      consult: String(rows[i][9] || '')
     });
   }
 
@@ -265,8 +266,8 @@ function registerBooking(data) {
   var rows = sheet.getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) {
     if (rows[i][0] === data.code) {
-      // Update bestaande rij (10 kolommen)
-      sheet.getRange(i + 1, 1, 1, 10).setValues([[
+      // Update bestaande rij (11 kolommen)
+      sheet.getRange(i + 1, 1, 1, 11).setValues([[
         data.code,
         data.name,
         data.email,
@@ -276,6 +277,7 @@ function registerBooking(data) {
         data.persons || '',
         data.phone || '',
         data.remark || '',
+        data.consult || '',
         'nee'
       ]]);
       sendAdminNotification(data, true);
@@ -284,7 +286,7 @@ function registerBooking(data) {
     }
   }
 
-  // Nieuwe rij toevoegen (10 kolommen)
+  // Nieuwe rij toevoegen (11 kolommen)
   sheet.appendRow([
     data.code,
     data.name,
@@ -295,6 +297,7 @@ function registerBooking(data) {
     data.persons || '',
     data.phone || '',
     data.remark || '',
+    data.consult || '',
     'nee'
   ]);
 
@@ -332,9 +335,9 @@ function getOrCreateBookingsSheet() {
     sheet = ss.insertSheet(BOOKINGS_SHEET);
     sheet.appendRow([
       'Code', 'Naam', 'E-mail', 'Datum', 'Starttijd',
-      'Eindtijd', 'Personen', 'Telefoon', 'Opmerking', 'Herinnering verstuurd'
+      'Eindtijd', 'Personen', 'Telefoon', 'Opmerking', 'Consult beschikbaarheid', 'Herinnering verstuurd'
     ]);
-    sheet.getRange(1, 1, 1, 10).setFontWeight('bold');
+    sheet.getRange(1, 1, 1, 11).setFontWeight('bold');
   }
 
   return sheet;
@@ -499,6 +502,7 @@ function sendAdminNotification(data, isReschedule) {
     + '<p style="margin: 0.3rem 0;"><strong>E-mail:</strong> ' + data.email + '</p>'
     + '<p style="margin: 0.3rem 0;"><strong>Code:</strong> ' + data.code + '</p>'
     + '<p style="margin: 0.3rem 0;"><strong>Opmerking:</strong> ' + (data.remark || '-') + '</p>'
+    + '<p style="margin: 0.3rem 0;"><strong>Consult beschikbaarheid:</strong> ' + (data.consult || '-') + '</p>'
     + '</div>'
     + '</div>'
     + '</div>';
@@ -510,7 +514,8 @@ function sendAdminNotification(data, isReschedule) {
     + 'Telefoon: ' + (data.phone || '-') + '\n'
     + 'E-mail: ' + data.email + '\n'
     + 'Code: ' + data.code + '\n'
-    + 'Opmerking: ' + (data.remark || '-');
+    + 'Opmerking: ' + (data.remark || '-') + '\n'
+    + 'Consult beschikbaarheid: ' + (data.consult || '-');
 
   GmailApp.sendEmail(adminEmail, subject, plainText, {
     name: SENDER_NAME,
@@ -538,7 +543,8 @@ function createCalendarEvent(data) {
       + 'E-mail: ' + data.email + '\n'
       + 'Telefoon: ' + (data.phone || '-') + '\n'
       + 'Boekingscode: ' + data.code + '\n'
-      + 'Opmerking: ' + (data.remark || '-');
+      + 'Opmerking: ' + (data.remark || '-') + '\n'
+      + 'Consult beschikbaarheid: ' + (data.consult || '-');
 
     calendar.createEvent(title, startDateTime, endDateTime, {
       description: description,
