@@ -140,11 +140,11 @@ async function syncGoogleCalendar() {
             const existing = avail[event.date];
             // Sla over als er al een boeking op die dag staat (bookedBy = huurder)
             if (existing && existing.bookedBy) return;
-            // Sla over als admin handmatig een andere status heeft gezet (zonder "Studio agenda" note)
-            if (existing && existing.note && !existing.note.startsWith('Studio agenda')) return;
+            // Sla over als admin handmatig een andere status heeft gezet (niet Studio agenda of Fotoshoot)
+            if (existing && existing.note && !existing.note.startsWith('Studio agenda') && !existing.note.startsWith('Fotoshoot')) return;
 
             // Markeer als niet-beschikbaar met Studio agenda label
-            if (!existing || existing.note?.startsWith('Studio agenda') || existing.status === 'beschikbaar' || !existing.status) {
+            if (!existing || existing.note?.startsWith('Studio agenda') || existing.note?.startsWith('Fotoshoot') || existing.status === 'beschikbaar' || !existing.status) {
                 avail[event.date] = {
                     status: 'niet-beschikbaar',
                     note: 'Studio agenda: ' + event.title
@@ -239,25 +239,37 @@ async function applyFotoshootBeschikbaarheid() {
     let avail = loadMap(STORAGE_KEYS.availability);
     let changed = false;
 
-    // Verwijder alle "check" entries die niet meer in fotoshoot slots staan
+    // Verwijder fotoshoot-entries die niet meer in fotoshoot slots staan
     for (const dateStr in avail) {
-        if (avail[dateStr].status === 'check' && !avail[dateStr].bookedBy && !fotoshootSlots[dateStr]) {
+        const note = avail[dateStr].note || '';
+        if (note.startsWith('Fotoshoot') && !avail[dateStr].bookedBy && !fotoshootSlots[dateStr]) {
             delete avail[dateStr];
             changed = true;
         }
     }
 
-    // Voeg fotoshoot-dagen toe als oranje (check) in de kalender
+    // Voeg fotoshoot-dagen toe in de kalender
     for (const dateStr in fotoshootSlots) {
         const existing = avail[dateStr];
         if (existing && existing.bookedBy) continue;
-        if (existing && existing.status === 'niet-beschikbaar') continue;
-        if (existing && existing.note && !existing.note.startsWith('Fotoshoot')) continue;
+        // Sta toe dat fotoshoot-entries Studio agenda entries overschrijven en vice versa
+        if (existing && existing.note && !existing.note.startsWith('Fotoshoot') && !existing.note.startsWith('Studio agenda')) continue;
 
         const slot = fotoshootSlots[dateStr];
-        const availTimes = getAvailableFotoshootTimes(dateStr, slot);
+        const allTimes = generateTimeSlots(slot.startTime, slot.endTime);
+        const bookedTimes = fotoshootBookings.filter(b => b.date === dateStr).map(b => b.time);
+        const hasBookings = bookedTimes.length > 0;
+        const availTimes = allTimes.filter(t => !bookedTimes.includes(t));
 
-        if (availTimes.length > 0) {
+        if (hasBookings) {
+            // Er is een boeking → rood (studio is bezet)
+            avail[dateStr] = {
+                status: 'niet-beschikbaar',
+                note: 'Fotoshoot geboekt'
+            };
+            changed = true;
+        } else if (availTimes.length > 0) {
+            // Alleen beschikbaarheid, geen boekingen → oranje (check)
             avail[dateStr] = {
                 status: 'check',
                 note: 'Fotoshoot beschikbaar'
@@ -465,10 +477,8 @@ function startApp() {
 
     // Vaste bezetting toepassen (donderdagen/vrijdagen)
     applyVasteBezetting();
-    // Fotoshoot beschikbaarheid toepassen (oranje)
-    applyFotoshootBeschikbaarheid();
-    // Automatisch synchroniseren met Google Calendar
-    syncGoogleCalendar();
+    // Fotoshoot beschikbaarheid toepassen (oranje/rood), daarna Google Calendar sync
+    applyFotoshootBeschikbaarheid().then(() => syncGoogleCalendar());
 }
 
 // ============================================
