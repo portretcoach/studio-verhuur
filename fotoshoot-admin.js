@@ -162,18 +162,48 @@ function handleLogout() {
 // ============================================
 // ADMIN ACTIONS
 // ============================================
+let editingDate = null; // Welke datum wordt bewerkt (null = nieuwe dag toevoegen)
+
+function startEditSlot(dateStr) {
+    const slot = fotoshootSlots[dateStr];
+    if (!slot) return;
+
+    editingDate = dateStr;
+    document.getElementById('fs-date').value = dateStr;
+    document.getElementById('fs-start').value = slot.startTime;
+    document.getElementById('fs-end').value = slot.endTime;
+    document.getElementById('fs-add-day').textContent = 'Wijziging opslaan';
+    document.getElementById('fs-date').disabled = true;
+    document.getElementById('fs-cancel-edit').classList.remove('hidden');
+
+    // Scroll naar formulier
+    document.getElementById('fs-date').closest('.admin-add-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelEdit() {
+    editingDate = null;
+    document.getElementById('fs-date').value = '';
+    document.getElementById('fs-start').value = '10:00';
+    document.getElementById('fs-end').value = '17:00';
+    document.getElementById('fs-add-day').textContent = '+ Dag toevoegen';
+    document.getElementById('fs-date').disabled = false;
+    document.getElementById('fs-cancel-edit').classList.add('hidden');
+}
+
 async function addFotoshootDay() {
-    const dateStr = document.getElementById('fs-date').value;
+    const dateStr = editingDate || document.getElementById('fs-date').value;
     const startTime = document.getElementById('fs-start').value;
     const endTime = document.getElementById('fs-end').value;
+    const isEdit = !!editingDate;
 
     if (!dateStr) { showToast('Kies een datum', 'error'); return; }
     if (!startTime || !endTime) { showToast('Vul start- en eindtijd in', 'error'); return; }
-    if (dateStr < todayStr()) { showToast('Datum moet in de toekomst liggen', 'error'); return; }
+    if (!isEdit && dateStr < todayStr()) { showToast('Datum moet in de toekomst liggen', 'error'); return; }
     if (startTime >= endTime) { showToast('Eindtijd moet na starttijd liggen', 'error'); return; }
 
     // Optimistic update
     fotoshootSlots[dateStr] = { startTime, endTime };
+    cancelEdit();
     renderAll();
 
     // Opslaan op server
@@ -191,8 +221,10 @@ async function addFotoshootDay() {
     showLoading(false);
     renderAll();
 
-    document.getElementById('fs-date').value = '';
-    showToast(`Beschikbaar ${startTime}–${endTime} voor ${formatDateNL(dateStr)}`, 'success');
+    showToast(isEdit
+        ? `Tijden gewijzigd naar ${startTime}–${endTime}`
+        : `Beschikbaar ${startTime}–${endTime} voor ${formatDateNL(dateStr)}`,
+        'success');
 }
 
 async function removeFotoshootDay(dateStr) {
@@ -271,7 +303,10 @@ function renderSlots() {
         el.innerHTML = `
             <div class="admin-day-header">
                 <h4>${formatDateNL(dateStr)}</h4>
-                ${!isPast ? `<button class="btn-danger btn-small" data-remove="${dateStr}">Verwijderen</button>` : '<span class="past-label">Verlopen</span>'}
+                <div class="admin-day-actions">
+                    ${!isPast ? `<button class="btn-small" data-edit="${dateStr}">Bewerken</button>` : ''}
+                    ${!isPast ? `<button class="btn-danger btn-small" data-remove="${dateStr}">Verwijderen</button>` : '<span class="past-label">Verlopen</span>'}
+                </div>
             </div>
             <p class="admin-availability">Beschikbaar ${slot.startTime} – ${slot.endTime}</p>
             <div class="admin-time-chips">${bookingChips}</div>
@@ -279,6 +314,9 @@ function renderSlots() {
         container.appendChild(el);
     });
 
+    container.querySelectorAll('[data-edit]').forEach(btn => {
+        btn.addEventListener('click', () => startEditSlot(btn.dataset.edit));
+    });
     container.querySelectorAll('[data-remove]').forEach(btn => {
         btn.addEventListener('click', () => removeFotoshootDay(btn.dataset.remove));
     });
@@ -337,6 +375,7 @@ function showToast(message, type = '') {
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('pin-form').addEventListener('submit', handlePinLogin);
     document.getElementById('fs-add-day').addEventListener('click', addFotoshootDay);
+    document.getElementById('fs-cancel-edit').addEventListener('click', cancelEdit);
     document.getElementById('change-pin').addEventListener('click', handleChangePin);
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
 

@@ -591,6 +591,11 @@ footer {
     font-size: 1rem;
 }
 
+.admin-day-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
 .past-label {
     color: var(--text-light);
     font-size: 0.8rem;
