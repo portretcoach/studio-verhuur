@@ -74,6 +74,13 @@ function doPost(e) {
         cancelBookingInSheet(data.code);
         return jsonResponse({ success: true });
 
+      case 'checkPin':
+        if (validatePin(data.pin)) {
+          return jsonResponse({ success: true });
+        } else {
+          return jsonResponse({ success: false, error: 'Ongeldige PIN' });
+        }
+
       case 'changePin':
         if (!validatePin(data.currentPin)) {
           return jsonResponse({ success: false, error: 'Huidige PIN is onjuist' });

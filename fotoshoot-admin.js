@@ -58,22 +58,31 @@ async function loadDataFromServer() {
 }
 
 /**
- * POST naar de server
+ * POST naar de server — retourneert altijd { success, error? }
  */
-function apiPost(data) {
-    return fetch(API_URL, {
-        method: 'POST',
-        body: JSON.stringify(data)
-    })
-    .then(r => r.json())
-    .catch(err => {
-        console.error('API POST fout:', err);
-        return fetch(API_URL, {
+async function apiPost(data) {
+    try {
+        const response = await fetch(API_URL, {
             method: 'POST',
-            mode: 'no-cors',
             body: JSON.stringify(data)
-        }).then(() => ({ success: true, fallback: true }));
-    });
+        });
+        const result = await response.json();
+        return result;
+    } catch (err) {
+        console.error('API POST fout:', err);
+        // Fallback: probeer met no-cors (response is opaque, dus we weten niet of het lukte)
+        try {
+            await fetch(API_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify(data)
+            });
+            return { success: true, fallback: true };
+        } catch (err2) {
+            console.error('API POST fallback ook mislukt:', err2);
+            return { success: false, error: 'Geen verbinding met server' };
+        }
+    }
 }
 
 // ============================================
@@ -201,14 +210,11 @@ async function addFotoshootDay() {
     if (!isEdit && dateStr < todayStr()) { showToast('Datum moet in de toekomst liggen', 'error'); return; }
     if (startTime >= endTime) { showToast('Eindtijd moet na starttijd liggen', 'error'); return; }
 
-    // Optimistic update
-    fotoshootSlots[dateStr] = { startTime, endTime };
     cancelEdit();
-    renderAll();
+    showLoading(true);
 
     // Opslaan op server
-    showLoading(true);
-    await apiPost({
+    const result = await apiPost({
         action: 'addSlot',
         pin: adminPin,
         date: dateStr,
@@ -216,56 +222,85 @@ async function addFotoshootDay() {
         endTime: endTime
     });
 
-    // Herlaad data van server om in sync te blijven
+    // Server gaf expliciet een fout terug
+    if (result.success === false && !result.fallback) {
+        await loadDataFromServer();
+        showLoading(false);
+        renderAll();
+        showToast(`Opslaan mislukt: ${result.error || 'onbekende fout'}`, 'error');
+        return;
+    }
+
+    // Herlaad data en controleer of slot echt is opgeslagen
     await loadDataFromServer();
     showLoading(false);
     renderAll();
 
-    showToast(isEdit
-        ? `Tijden gewijzigd naar ${startTime}–${endTime}`
-        : `Beschikbaar ${startTime}–${endTime} voor ${formatDateNL(dateStr)}`,
-        'success');
+    if (fotoshootSlots[dateStr]) {
+        showToast(isEdit
+            ? `Tijden gewijzigd naar ${startTime}–${endTime}`
+            : `Beschikbaar ${startTime}–${endTime} voor ${formatDateNL(dateStr)}`,
+            'success');
+    } else {
+        showToast('Opslaan lijkt niet gelukt — probeer opnieuw', 'error');
+    }
 }
 
 async function removeFotoshootDay(dateStr) {
     if (!confirm(`Fotoshoot-dag ${formatDateNL(dateStr)} verwijderen?`)) return;
 
-    // Optimistic update
-    delete fotoshootSlots[dateStr];
-    renderAll();
+    showLoading(true);
 
     // Verwijderen op server
-    showLoading(true);
-    await apiPost({
+    const result = await apiPost({
         action: 'removeSlot',
         pin: adminPin,
         date: dateStr
     });
 
+    // Server gaf expliciet een fout terug
+    if (result.success === false && !result.fallback) {
+        await loadDataFromServer();
+        showLoading(false);
+        renderAll();
+        showToast(`Verwijderen mislukt: ${result.error || 'onbekende fout'}`, 'error');
+        return;
+    }
+
+    // Herlaad data en controleer of slot echt weg is
     await loadDataFromServer();
     showLoading(false);
     renderAll();
-    showToast('Fotoshoot-dag verwijderd');
+
+    if (!fotoshootSlots[dateStr]) {
+        showToast('Fotoshoot-dag verwijderd', 'success');
+    } else {
+        showToast('Verwijderen lijkt niet gelukt — probeer opnieuw', 'error');
+    }
 }
 
 async function cancelFotoshootBooking(bookingCode) {
     if (!confirm('Fotoshoot-boeking annuleren?')) return;
 
-    // Optimistic update
-    fotoshootBookings = fotoshootBookings.filter(b => b.code !== bookingCode);
-    renderAll();
+    showLoading(true);
 
     // Verwijderen op server
-    showLoading(true);
-    await apiPost({
+    const result = await apiPost({
         action: 'cancelBooking',
         code: bookingCode
     });
 
-    await loadDataFromServer();
-    showLoading(false);
-    renderAll();
-    showToast('Boeking geannuleerd, tijdslot weer beschikbaar');
+    if (result.success) {
+        await loadDataFromServer();
+        showLoading(false);
+        renderAll();
+        showToast('Boeking geannuleerd, tijdslot weer beschikbaar', 'success');
+    } else {
+        await loadDataFromServer();
+        showLoading(false);
+        renderAll();
+        showToast(`Annuleren mislukt: ${result.error || 'onbekende fout'}`, 'error');
+    }
 }
 
 // ============================================
