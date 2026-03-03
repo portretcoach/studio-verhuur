@@ -1,7 +1,6 @@
 // ============================================
-// FOTOSHOOT ADMIN — PIN-beveiligd beheer
+// FOTOSHOOT ADMIN — Beheer zonder PIN
 // ============================================
-const DEFAULT_PIN = '1234';
 const BOOKING_BLOCK_MINUTES = 150;
 
 const MONTHS_NL = [
@@ -36,7 +35,7 @@ function formatDateNL(dateStr) {
 // ============================================
 
 /**
- * Haal alle data op van de server
+ * Haal alle data op van de server (GET)
  */
 async function loadDataFromServer() {
     try {
@@ -58,30 +57,35 @@ async function loadDataFromServer() {
 }
 
 /**
- * POST naar de server — retourneert altijd { success, error? }
+ * Verwerk server response (slots + bookings bijwerken)
+ * Server stuurt na elke POST de actuele data terug
  */
-async function apiPost(data) {
+function applyServerData(data) {
+    if (data && data.success) {
+        fotoshootSlots = data.slots || {};
+        fotoshootBookings = data.bookings || [];
+        return true;
+    }
+    return false;
+}
+
+/**
+ * POST naar de server — retourneert server response met actuele data
+ * Geen no-cors fallback meer: als het faalt, tonen we een duidelijke fout
+ */
+async function apiPost(payload) {
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
-            body: JSON.stringify(data)
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(payload)
         });
         const result = await response.json();
+        console.log('API response:', result);
         return result;
     } catch (err) {
         console.error('API POST fout:', err);
-        // Fallback: probeer met no-cors (response is opaque, dus we weten niet of het lukte)
-        try {
-            await fetch(API_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                body: JSON.stringify(data)
-            });
-            return { success: true, fallback: true };
-        } catch (err2) {
-            console.error('API POST fallback ook mislukt:', err2);
-            return { success: false, error: 'Geen verbinding met server' };
-        }
+        return { success: false, error: 'Kon server niet bereiken: ' + err.message };
     }
 }
 
@@ -90,7 +94,6 @@ async function apiPost(data) {
 // ============================================
 let fotoshootSlots = {};
 let fotoshootBookings = [];
-let adminPin = ''; // PIN die admin heeft ingevoerd
 
 // ============================================
 // LOADING STATE
@@ -103,75 +106,26 @@ function showLoading(show) {
 }
 
 // ============================================
-// PIN LOGIN
+// STARTUP — direct laden, geen login
 // ============================================
-async function handlePinLogin(e) {
-    e.preventDefault();
-    const input = document.getElementById('pin-input').value;
-
-    // Bewaar PIN voor admin API calls
-    adminPin = input;
-
-    // Toon loading terwijl we data ophalen
-    document.getElementById('pin-error').classList.add('hidden');
+async function startup() {
     showLoading(true);
-
     const success = await loadDataFromServer();
     showLoading(false);
 
+    document.getElementById('admin-dashboard').classList.remove('hidden');
+
     if (success) {
-        document.getElementById('login-screen').classList.add('hidden');
-        document.getElementById('admin-dashboard').classList.remove('hidden');
         renderAll();
     } else {
-        // Als server niet bereikbaar is, probeer local PIN check
-        const localPin = localStorage.getItem('sv_fotoshoot_pin') || DEFAULT_PIN;
-        if (input === localPin) {
-            document.getElementById('login-screen').classList.add('hidden');
-            document.getElementById('admin-dashboard').classList.remove('hidden');
-            showToast('Server niet bereikbaar — data kan verouderd zijn', 'error');
-            renderAll();
-        } else {
-            document.getElementById('pin-error').classList.remove('hidden');
-            document.getElementById('pin-input').value = '';
-            document.getElementById('pin-input').focus();
-        }
+        showToast('Server niet bereikbaar — probeer de pagina te herladen', 'error');
     }
-}
-
-async function handleChangePin() {
-    const newPin = document.getElementById('new-pin').value.trim();
-    if (!newPin || newPin.length < 4) {
-        showToast('PIN moet minimaal 4 tekens zijn', 'error');
-        return;
-    }
-
-    // Update op server
-    const result = await apiPost({
-        action: 'changePin',
-        currentPin: adminPin,
-        newPin: newPin
-    });
-
-    // Update lokaal
-    localStorage.setItem('sv_fotoshoot_pin', newPin);
-    adminPin = newPin;
-
-    document.getElementById('new-pin').value = '';
-    showToast('PIN gewijzigd', 'success');
-}
-
-function handleLogout() {
-    document.getElementById('admin-dashboard').classList.add('hidden');
-    document.getElementById('login-screen').classList.remove('hidden');
-    document.getElementById('pin-input').value = '';
-    adminPin = '';
 }
 
 // ============================================
 // ADMIN ACTIONS
 // ============================================
-let editingDate = null; // Welke datum wordt bewerkt (null = nieuwe dag toevoegen)
+let editingDate = null;
 
 function startEditSlot(dateStr) {
     const slot = fotoshootSlots[dateStr];
@@ -185,7 +139,6 @@ function startEditSlot(dateStr) {
     document.getElementById('fs-date').disabled = true;
     document.getElementById('fs-cancel-edit').classList.remove('hidden');
 
-    // Scroll naar formulier
     document.getElementById('fs-date').closest('.admin-add-form').scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -213,36 +166,27 @@ async function addFotoshootDay() {
     cancelEdit();
     showLoading(true);
 
-    // Opslaan op server
     const result = await apiPost({
         action: 'addSlot',
-        pin: adminPin,
         date: dateStr,
         startTime: startTime,
         endTime: endTime
     });
 
-    // Server gaf expliciet een fout terug
-    if (result.success === false && !result.fallback) {
-        await loadDataFromServer();
-        showLoading(false);
-        renderAll();
-        showToast(`Opslaan mislukt: ${result.error || 'onbekende fout'}`, 'error');
-        return;
-    }
-
-    // Herlaad data en controleer of slot echt is opgeslagen
-    await loadDataFromServer();
     showLoading(false);
-    renderAll();
 
-    if (fotoshootSlots[dateStr]) {
-        showToast(isEdit
-            ? `Tijden gewijzigd naar ${startTime}–${endTime}`
-            : `Beschikbaar ${startTime}–${endTime} voor ${formatDateNL(dateStr)}`,
-            'success');
+    if (applyServerData(result)) {
+        renderAll();
+        if (fotoshootSlots[dateStr]) {
+            showToast(isEdit
+                ? `Tijden gewijzigd naar ${startTime}–${endTime}`
+                : `Beschikbaar ${startTime}–${endTime} voor ${formatDateNL(dateStr)}`,
+                'success');
+        } else {
+            showToast('Opslaan lijkt niet gelukt — probeer opnieuw', 'error');
+        }
     } else {
-        showToast('Opslaan lijkt niet gelukt — probeer opnieuw', 'error');
+        showToast(`Opslaan mislukt: ${result.error || 'onbekende fout'}`, 'error');
     }
 }
 
@@ -251,31 +195,22 @@ async function removeFotoshootDay(dateStr) {
 
     showLoading(true);
 
-    // Verwijderen op server
     const result = await apiPost({
         action: 'removeSlot',
-        pin: adminPin,
         date: dateStr
     });
 
-    // Server gaf expliciet een fout terug
-    if (result.success === false && !result.fallback) {
-        await loadDataFromServer();
-        showLoading(false);
-        renderAll();
-        showToast(`Verwijderen mislukt: ${result.error || 'onbekende fout'}`, 'error');
-        return;
-    }
-
-    // Herlaad data en controleer of slot echt weg is
-    await loadDataFromServer();
     showLoading(false);
-    renderAll();
 
-    if (!fotoshootSlots[dateStr]) {
-        showToast('Fotoshoot-dag verwijderd', 'success');
+    if (applyServerData(result)) {
+        renderAll();
+        if (!fotoshootSlots[dateStr]) {
+            showToast('Fotoshoot-dag verwijderd', 'success');
+        } else {
+            showToast('Verwijderen lijkt niet gelukt — probeer opnieuw', 'error');
+        }
     } else {
-        showToast('Verwijderen lijkt niet gelukt — probeer opnieuw', 'error');
+        showToast(`Verwijderen mislukt: ${result.error || 'onbekende fout'}`, 'error');
     }
 }
 
@@ -284,21 +219,17 @@ async function cancelFotoshootBooking(bookingCode) {
 
     showLoading(true);
 
-    // Verwijderen op server
     const result = await apiPost({
         action: 'cancelBooking',
         code: bookingCode
     });
 
-    if (result.success) {
-        await loadDataFromServer();
-        showLoading(false);
+    showLoading(false);
+
+    if (applyServerData(result)) {
         renderAll();
         showToast('Boeking geannuleerd, tijdslot weer beschikbaar', 'success');
     } else {
-        await loadDataFromServer();
-        showLoading(false);
-        renderAll();
         showToast(`Annuleren mislukt: ${result.error || 'onbekende fout'}`, 'error');
     }
 }
@@ -408,11 +339,8 @@ function showToast(message, type = '') {
 // INIT
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('pin-form').addEventListener('submit', handlePinLogin);
     document.getElementById('fs-add-day').addEventListener('click', addFotoshootDay);
     document.getElementById('fs-cancel-edit').addEventListener('click', cancelEdit);
-    document.getElementById('change-pin').addEventListener('click', handleChangePin);
-    document.getElementById('logout-btn').addEventListener('click', handleLogout);
 
     document.getElementById('copy-link').addEventListener('click', () => {
         const url = new URL('fotoshoot.html', window.location.href).href;
@@ -420,4 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Link gekopieerd!', 'success');
         });
     });
+
+    // Direct starten — geen login nodig
+    startup();
 });

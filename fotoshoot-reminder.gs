@@ -54,39 +54,19 @@ function doPost(e) {
     switch (data.action) {
       case 'register':
         registerBooking(data);
-        return jsonResponse({ success: true });
+        return jsonResponse(getAllData());
 
       case 'addSlot':
-        if (!validatePin(data.pin)) {
-          return jsonResponse({ success: false, error: 'Ongeldige PIN' });
-        }
         addSlot(data.date, data.startTime, data.endTime);
-        return jsonResponse({ success: true });
+        return jsonResponse(getAllData());
 
       case 'removeSlot':
-        if (!validatePin(data.pin)) {
-          return jsonResponse({ success: false, error: 'Ongeldige PIN' });
-        }
         removeSlot(data.date);
-        return jsonResponse({ success: true });
+        return jsonResponse(getAllData());
 
       case 'cancelBooking':
         cancelBookingInSheet(data.code);
-        return jsonResponse({ success: true });
-
-      case 'checkPin':
-        if (validatePin(data.pin)) {
-          return jsonResponse({ success: true });
-        } else {
-          return jsonResponse({ success: false, error: 'Ongeldige PIN' });
-        }
-
-      case 'changePin':
-        if (!validatePin(data.currentPin)) {
-          return jsonResponse({ success: false, error: 'Huidige PIN is onjuist' });
-        }
-        setPin(data.newPin);
-        return jsonResponse({ success: true });
+        return jsonResponse(getAllData());
 
       default:
         return jsonResponse({ success: false, error: 'Onbekende actie' });

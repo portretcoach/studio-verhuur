@@ -14,25 +14,6 @@
         <p>Data laden...</p>
     </div>
 
-    <!-- PIN LOGIN -->
-    <div id="login-screen" class="page">
-        <header>
-            <h1>Fotoshoot Admin</h1>
-            <p class="subtitle">Iris van 't Riet</p>
-        </header>
-        <div class="step">
-            <h2>Inloggen</h2>
-            <p class="step-info">Voer je PIN in om de fotoshoot-agenda te beheren.</p>
-            <form id="pin-form">
-                <label>PIN code
-                    <input type="password" id="pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Voer PIN in" autocomplete="off">
-                </label>
-                <p id="pin-error" class="error-text hidden">Onjuiste PIN code</p>
-                <button type="submit" class="btn-primary">Inloggen</button>
-            </form>
-        </div>
-    </div>
-
     <!-- ADMIN DASHBOARD -->
     <div id="admin-dashboard" class="page hidden">
         <header>
@@ -73,18 +54,6 @@
         <div class="step">
             <h2>Boekingen</h2>
             <div id="fs-bookings-container"></div>
-        </div>
-
-        <!-- PIN wijzigen + uitloggen -->
-        <div class="step">
-            <h2>Instellingen</h2>
-            <div class="admin-add-form">
-                <label>PIN wijzigen
-                    <input type="password" id="new-pin" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Nieuwe PIN">
-                </label>
-                <button class="btn-primary" id="change-pin">PIN opslaan</button>
-            </div>
-            <button class="btn-back" id="logout-btn" style="margin-top:1rem">Uitloggen</button>
         </div>
 
         <footer>
