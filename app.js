@@ -523,6 +523,8 @@ function setupNavigation() {
 // 6. CALENDAR
 // ============================================
 function getStatus(dateStr) {
+    // Een dag met een boeking is altijd bezet
+    if (bookings.some(b => b.date === dateStr)) return 'niet-beschikbaar';
     const entry = availability[dateStr];
     if (!entry) return 'beschikbaar';
     return entry.status || 'beschikbaar';
