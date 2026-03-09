@@ -85,26 +85,35 @@ function formatDateStr(y, m, d) {
     return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
+// Normaliseer elke datum-string naar YYYY-MM-DD (handelt ISO strings af)
+function toDateOnly(dateStr) {
+    if (!dateStr) return '';
+    return String(dateStr).substring(0, 10);
+}
+
 function todayStr() {
     const d = new Date();
     return formatDateStr(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
 function formatDateNL(dateStr) {
-    const d = new Date(dateStr + 'T12:00:00');
+    const ds = toDateOnly(dateStr);
+    if (!ds) return '–';
+    const d = new Date(ds + 'T12:00:00');
+    if (isNaN(d.getTime())) return '–';
     const dayName = DAYS_NL[(d.getDay() + 6) % 7];
     return `${dayName} ${d.getDate()} ${MONTHS_NL[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 function addMonths(dateStr, months) {
-    const d = new Date(dateStr + 'T12:00:00');
+    const d = new Date(toDateOnly(dateStr) + 'T12:00:00');
     d.setMonth(d.getMonth() + months);
     return formatDateStr(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
 function daysUntil(dateStr) {
     const today = new Date(todayStr() + 'T12:00:00');
-    const target = new Date(dateStr + 'T12:00:00');
+    const target = new Date(toDateOnly(dateStr) + 'T12:00:00');
     return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
 }
 
@@ -357,6 +366,13 @@ async function initAuth() {
             bookings = data.bookings || [];
             strippenkaarten = data.strippenkaarten || [];
             vasteHuur = data.vasteHuur || [];
+
+            // Normaliseer ISO datums naar YYYY-MM-DD (API geeft soms volledige ISO strings)
+            bookings.forEach(b => { if (b.date) b.date = toDateOnly(b.date); });
+            strippenkaarten.forEach(sk => {
+                if (sk.startDate) sk.startDate = toDateOnly(sk.startDate);
+                if (sk.expiryDate) sk.expiryDate = toDateOnly(sk.expiryDate);
+            });
 
             // Cache lokaal voor snelle toegang
             localStorage.setItem(STORAGE_KEYS.users, JSON.stringify(users));

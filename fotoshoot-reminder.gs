@@ -516,12 +516,17 @@ function sendAdminNotification(data, isReschedule) {
 
 function createCalendarEvent(data) {
   try {
-    // Gebruik de studio-agenda (rode agenda)
-    var calendar = CalendarApp.getCalendarById('info@irisvantriet.nl') || CalendarApp.getDefaultCalendar();
+    // Fotoshoot duurt exact 2 uur in de agenda
+    var SESSION_HOURS = 2;
+
+    var calendar = CalendarApp.getCalendarById('info@irisvantriet.nl');
+    if (!calendar) {
+      Logger.log('Studio-agenda niet gevonden, gebruik standaard agenda');
+      calendar = CalendarApp.getDefaultCalendar();
+    }
 
     var startDateTime = new Date(data.date + 'T' + data.time + ':00');
-    var endTime = data.endTime || data.time;
-    var endDateTime = new Date(data.date + 'T' + endTime + ':00');
+    var endDateTime = new Date(startDateTime.getTime() + SESSION_HOURS * 60 * 60 * 1000);
 
     var title = 'Fotoshoot: ' + data.name + ' (' + data.code + ')';
 
@@ -538,10 +543,10 @@ function createCalendarEvent(data) {
       location: 'Weg en Bos 22c, Bergschenhoek'
     });
 
-    Logger.log('Agenda-event aangemaakt voor ' + data.date + ' ' + data.time);
+    Logger.log('Agenda-event aangemaakt: ' + title + ' op ' + data.date + ' ' + data.time + ' - ' + Utilities.formatDate(endDateTime, 'Europe/Amsterdam', 'HH:mm'));
 
   } catch (err) {
-    Logger.log('Fout bij aanmaken agenda-event: ' + err.message);
+    Logger.log('FOUT bij aanmaken agenda-event: ' + err.message + ' | Stack: ' + err.stack);
   }
 }
 
@@ -630,4 +635,12 @@ function testAdminNotificationAndCalendar() {
 function testReminders() {
   sendReminders();
   Logger.log('Herinnering check uitgevoerd');
+}
+
+/**
+ * Autorisatie-test: draai handmatig om CalendarApp-rechten te activeren
+ */
+function authorizeCalendar() {
+  var cal = CalendarApp.getDefaultCalendar();
+  Logger.log('Calendar toegang OK: ' + cal.getName());
 }
