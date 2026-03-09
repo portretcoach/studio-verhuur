@@ -368,7 +368,10 @@ async function initAuth() {
             vasteHuur = data.vasteHuur || [];
 
             // Normaliseer ISO datums naar YYYY-MM-DD (API geeft soms volledige ISO strings)
-            bookings.forEach(b => { if (b.date) b.date = toDateOnly(b.date); });
+            bookings.forEach(b => {
+                if (b.date) b.date = toDateOnly(b.date);
+                if (!b.strippenkaartId && b.cardId) b.strippenkaartId = b.cardId;
+            });
             strippenkaarten.forEach(sk => {
                 if (sk.startDate) sk.startDate = toDateOnly(sk.startDate);
                 if (sk.expiryDate) sk.expiryDate = toDateOnly(sk.expiryDate);
@@ -777,7 +780,8 @@ function cancelBooking(bookingId) {
 
     // Alleen strip herstellen als annulering >= 1 week van tevoren
     if (isKosteloos) {
-        const card = strippenkaarten.find(sk => sk.id === booking.strippenkaartId);
+        const cardRef = booking.strippenkaartId || booking.cardId;
+        const card = cardRef ? strippenkaarten.find(sk => sk.id === cardRef) : null;
         if (card) {
             card.usedStrips = Math.max(0, card.usedStrips - 1);
             if (card.expiryDate >= todayStr() && card.usedStrips < card.totalStrips) {
