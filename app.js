@@ -525,6 +525,12 @@ function setupNavigation() {
 // ============================================
 // 6. CALENDAR
 // ============================================
+function getBookingUserName(booking) {
+    if (booking.userName) return booking.userName;
+    const user = users.find(u => u.id === booking.userId);
+    return user ? user.naam : 'Onbekend';
+}
+
 function getStatus(dateStr) {
     // Een dag met een boeking is altijd bezet
     if (bookings.some(b => b.date === dateStr)) return 'niet-beschikbaar';
@@ -578,7 +584,7 @@ function renderCalendar() {
         const booking = bookings.find(b => b.date === dateStr);
         let bookedHtml = '';
         if (booking && currentSession.role === 'admin') {
-            bookedHtml = `<span class="cal-day-booked">${booking.userName}</span>`;
+            bookedHtml = `<span class="cal-day-booked">${getBookingUserName(booking)}</span>`;
         } else if (booking && booking.userId === currentSession.userId) {
             bookedHtml = `<span class="cal-day-booked">Mijn boeking</span>`;
         }
@@ -831,7 +837,7 @@ function renderBookingsList() {
                 <div class="booking-item">
                     <div>
                         <span class="booking-item-date">${formatDateNL(b.date)}</span>
-                        <span class="booking-item-name"> &mdash; ${b.userName}</span>
+                        <span class="booking-item-name"> &mdash; ${getBookingUserName(b)}</span>
                     </div>
                     ${b.date >= todayStr() ? `<button class="btn-danger" data-cancel="${b.id}">Annuleren</button>` : ''}
                 </div>
