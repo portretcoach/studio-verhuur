@@ -771,6 +771,18 @@ function confirmBooking() {
     };
     save(STORAGE_KEYS.availability, availability);
 
+    // Google Calendar event aanmaken
+    fetch(DASHBOARD_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({
+            action: 'createCalendarEvent',
+            date: selectedBookDate,
+            userName: currentSession.naam,
+            bookingId: booking.id
+        })
+    }).catch(err => console.warn('Calendar event aanmaken mislukt:', err));
+
     document.getElementById('booking-confirm-modal').classList.add('hidden');
     renderCalendar();
     renderMijnStrippenkaart();
@@ -796,6 +808,16 @@ function cancelBooking(bookingId) {
             save(STORAGE_KEYS.strippenkaarten, strippenkaarten);
         }
     }
+
+    // Google Calendar event verwijderen
+    fetch(DASHBOARD_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({
+            action: 'deleteCalendarEvent',
+            date: booking.date
+        })
+    }).catch(err => console.warn('Calendar event verwijderen mislukt:', err));
 
     // Dag altijd weer beschikbaar maken
     if (availability[booking.date] && availability[booking.date].bookedBy) {
