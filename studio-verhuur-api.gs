@@ -184,6 +184,18 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (action === 'createCalendarEvent') {
+      createCalendarEvent(body);
+      return ContentService.createTextOutput(JSON.stringify({ success: true }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'deleteCalendarEvent') {
+      deleteCalendarEvent(body);
+      return ContentService.createTextOutput(JSON.stringify({ success: true }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Unknown action' }))
       .setMimeType(ContentService.MimeType.JSON);
 
@@ -191,5 +203,57 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({
       success: false, error: err.message
     })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ============================================
+// GOOGLE CALENDAR: Studio boekingen
+// ============================================
+
+function createCalendarEvent(data) {
+  try {
+    var calendar = CalendarApp.getCalendarById('info@irisvantriet.nl');
+    if (!calendar) {
+      calendar = CalendarApp.getDefaultCalendar();
+    }
+
+    var startDateTime = new Date(data.date + 'T09:00:00');
+    var endDateTime = new Date(data.date + 'T17:00:00');
+
+    var title = 'Studio boeking: ' + (data.userName || 'Huurder');
+
+    calendar.createEvent(title, startDateTime, endDateTime, {
+      description: 'Studio boeking via dashboard\n\n'
+        + 'Huurder: ' + (data.userName || '-') + '\n'
+        + 'Boeking ID: ' + (data.bookingId || '-'),
+      location: 'Weg en Bos 22c, Bergschenhoek'
+    });
+
+    Logger.log('Studio agenda-event aangemaakt: ' + title + ' op ' + data.date);
+  } catch (err) {
+    Logger.log('FOUT bij aanmaken studio agenda-event: ' + err.message);
+  }
+}
+
+function deleteCalendarEvent(data) {
+  try {
+    var calendar = CalendarApp.getCalendarById('info@irisvantriet.nl');
+    if (!calendar) {
+      calendar = CalendarApp.getDefaultCalendar();
+    }
+
+    var searchDate = new Date(data.date + 'T00:00:00');
+    var nextDay = new Date(data.date + 'T23:59:59');
+    var events = calendar.getEvents(searchDate, nextDay);
+
+    for (var i = 0; i < events.length; i++) {
+      if (events[i].getTitle().indexOf('Studio boeking:') === 0) {
+        events[i].deleteEvent();
+        Logger.log('Studio agenda-event verwijderd op ' + data.date);
+        break;
+      }
+    }
+  } catch (err) {
+    Logger.log('FOUT bij verwijderen studio agenda-event: ' + err.message);
   }
 }
