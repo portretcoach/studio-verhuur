@@ -418,7 +418,7 @@ function handleLogin(e) {
     e.preventDefault();
     const username = document.getElementById('login-username').value.trim().toLowerCase();
     const password = document.getElementById('login-password').value;
-    const user = users.find(u => u.username.toLowerCase() === username && u.password === password);
+    const user = users.find(u => String(u.username).toLowerCase() === username && String(u.password) === password);
 
     if (user) {
         currentSession = { userId: user.id, role: user.role, naam: user.naam };
@@ -1178,7 +1178,7 @@ function createHuurder(e) {
     const password = document.getElementById('huurder-password').value;
 
     // Check unique username
-    if (users.find(u => u.username.toLowerCase() === username)) {
+    if (users.find(u => String(u.username).toLowerCase() === username)) {
         showToast('Gebruikersnaam bestaat al', 'error');
         return;
     }
