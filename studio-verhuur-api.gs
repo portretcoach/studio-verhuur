@@ -7,6 +7,7 @@
  * ENDPOINTS:
  *   GET  ?action=getData           → alle data ophalen
  *   POST ?action=saveCollection    → één collectie opslaan
+ *   POST ?action=saveSignature     → één contract-handtekening opslaan (upsert op userId)
  *
  * SETUP:
  * 1. Deploy als Web App (Uitvoeren als: Ik, Toegang: Iedereen)
@@ -21,7 +22,8 @@ const COLLECTIONS = {
   Availability:    ['date', 'status', 'note', 'bookedBy'],
   Bookings:        ['id', 'userId', 'date', 'cardId', 'createdAt'],
   Strippenkaarten: ['id', 'userId', 'userName', 'totalStrips', 'usedStrips', 'startDate', 'expiryDate', 'active'],
-  VasteHuur:       ['id', 'userId', 'userName', 'dayOfWeek', 'startDate', 'endDate', 'monthlyPrice']
+  VasteHuur:       ['id', 'userId', 'userName', 'dayOfWeek', 'startDate', 'endDate', 'monthlyPrice'],
+  Signatures:      ['userId', 'name', 'date', 'place', 'signedAt']
 };
 
 // ============================================
@@ -148,7 +150,8 @@ function doGet(e) {
       availability: sheetToMap('Availability', 'date'),
       bookings: sheetToArray('Bookings'),
       strippenkaarten: sheetToArray('Strippenkaarten'),
-      vasteHuur: sheetToArray('VasteHuur')
+      vasteHuur: sheetToArray('VasteHuur'),
+      signatures: sheetToMap('Signatures', 'userId')
     };
     return ContentService.createTextOutput(JSON.stringify(data))
       .setMimeType(ContentService.MimeType.JSON);
@@ -184,6 +187,12 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (action === 'saveSignature') {
+      saveSignature(body.signature);
+      return ContentService.createTextOutput(JSON.stringify({ success: true }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     if (action === 'createCalendarEvent') {
       createCalendarEvent(body);
       return ContentService.createTextOutput(JSON.stringify({ success: true }))
@@ -204,6 +213,39 @@ function doPost(e) {
       success: false, error: err.message
     })).setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// ============================================
+// CONTRACT HANDTEKENINGEN
+// ============================================
+
+// Upsert één handtekening op userId, zodat andere handtekeningen nooit overschreven worden
+function saveSignature(sig) {
+  if (!sig || !sig.userId) throw new Error('Handtekening zonder userId');
+
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const headers = COLLECTIONS.Signatures;
+  let sheet = ss.getSheetByName('Signatures');
+  if (!sheet) {
+    sheet = ss.insertSheet('Signatures');
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+  }
+
+  const row = headers.map(h => (sig[h] === undefined || sig[h] === null) ? '' : String(sig[h]));
+
+  const lastRow = sheet.getLastRow();
+  let targetRow = lastRow + 1;
+  if (lastRow > 1) {
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(sig.userId)) { targetRow = i + 2; break; }
+    }
+  }
+
+  // Als platte tekst opslaan, zodat Sheets de datum niet omzet (tijdzone-verschuiving)
+  const range = sheet.getRange(targetRow, 1, 1, headers.length);
+  range.setNumberFormat('@');
+  range.setValues([row]);
 }
 
 // ============================================

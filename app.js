@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
     bookings: 'sv_bookings',
     strippenkaarten: 'sv_strippenkaarten',
     vasteHuur: 'sv_vaste_huur',
+    signatures: 'sv_signatures',
     session: 'sv_session',
     fotoshootSlots: 'sv_fotoshoot_slots',
     fotoshootBookings: 'sv_fotoshoot_bookings',
@@ -62,6 +63,19 @@ function save(key, data) {
     const collection = API_COLLECTIONS[key];
     if (collection) {
         saveToAPI(collection, data);
+    }
+}
+
+// Eén handtekening naar Google Sheets (upsert op userId, overschrijft geen andere huurders)
+async function saveSignatureToAPI(signature) {
+    try {
+        await fetch(DASHBOARD_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'saveSignature', signature })
+        });
+    } catch (err) {
+        console.warn('API save mislukt voor handtekening', err);
     }
 }
 
@@ -383,6 +397,18 @@ async function initAuth() {
             localStorage.setItem(STORAGE_KEYS.bookings, JSON.stringify(bookings));
             localStorage.setItem(STORAGE_KEYS.strippenkaarten, JSON.stringify(strippenkaarten));
             localStorage.setItem(STORAGE_KEYS.vasteHuur, JSON.stringify(vasteHuur));
+
+            // Handtekeningen: API is leidend; lokaal gezette handtekeningen die nog
+            // niet in de Sheet staan (van vóór de sync) alsnog doorsturen
+            const signatures = data.signatures || {};
+            const localSignatures = loadMap(STORAGE_KEYS.signatures);
+            Object.entries(localSignatures).forEach(([userId, sig]) => {
+                if (!signatures[userId]) {
+                    signatures[userId] = sig;
+                    saveSignatureToAPI({ ...sig, userId });
+                }
+            });
+            localStorage.setItem(STORAGE_KEYS.signatures, JSON.stringify(signatures));
 
             console.log('Data geladen van API:', users.length, 'users,', Object.keys(availability).length, 'dagen');
         } else {
@@ -1108,6 +1134,7 @@ function renderHuurders() {
     container.innerHTML = '';
 
     const huurders = users.filter(u => u.role === 'huurder');
+    const signatures = loadMap(STORAGE_KEYS.signatures);
 
     if (huurders.length === 0) {
         container.innerHTML = `<div class="empty-state"><p>Nog geen huurders</p><span>Maak een huurder account aan</span></div>`;
@@ -1119,6 +1146,10 @@ function renderHuurders() {
             sk.userId === h.id && sk.active && sk.expiryDate >= todayStr() && sk.usedStrips < sk.totalStrips
         );
         const bookingCount = bookings.filter(b => b.userId === h.id).length;
+        const sig = signatures[h.id];
+        const contractStatus = sig
+            ? `<span class="contract-status signed">✓ Ondertekend</span> op ${formatDateNL(sig.date)}${sig.place ? ` te ${sig.place}` : ''}${sig.name ? ` door ${sig.name}` : ''}`
+            : `<span class="contract-status unsigned">Nog niet ondertekend</span>`;
 
         const el = document.createElement('div');
         el.className = 'huurder-card';
@@ -1134,6 +1165,7 @@ function renderHuurders() {
             ${h.kvk ? `<div class="detail"><strong>KVK:</strong> ${h.kvk}</div>` : ''}
             <div class="detail"><strong>Strippenkaart:</strong> ${activeCard ? `${activeCard.totalStrips - activeCard.usedStrips} strippen over` : 'Geen actieve kaart'}</div>
             <div class="detail"><strong>Boekingen:</strong> ${bookingCount}</div>
+            <div class="detail"><strong>Contract:</strong> ${contractStatus}</div>
         `;
         container.appendChild(el);
     });
@@ -1254,7 +1286,7 @@ function renderContract() {
     }
 
     // Check of contract al ondertekend is
-    const signatures = loadMap('sv_signatures');
+    const signatures = loadMap(STORAGE_KEYS.signatures);
     const mySignature = signatures[currentSession?.userId];
 
     if (mySignature) {
@@ -1289,15 +1321,17 @@ function signContract() {
     if (!place) { showToast('Vul de plaats in', 'error'); return; }
     if (!agree) { showToast('Je moet akkoord gaan met de voorwaarden', 'error'); return; }
 
-    const signatures = loadMap('sv_signatures');
-    signatures[currentSession.userId] = {
+    const signatures = loadMap(STORAGE_KEYS.signatures);
+    const signature = {
         name: name,
         date: date,
         place: place,
         signedAt: new Date().toISOString(),
         userId: currentSession.userId
     };
-    save('sv_signatures', signatures);
+    signatures[currentSession.userId] = signature;
+    save(STORAGE_KEYS.signatures, signatures);
+    saveSignatureToAPI(signature);
 
     renderContract();
     showToast('Contract ondertekend!', 'success');
