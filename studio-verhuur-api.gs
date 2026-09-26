@@ -8,6 +8,8 @@
  *   GET  ?action=getData           → alle data ophalen
  *   POST ?action=saveCollection    → één collectie opslaan
  *   POST ?action=saveSignature     → één contract-handtekening opslaan (upsert op userId)
+ *   POST ?action=createCalendarEvent → studio boeking in agenda
+ *   POST ?action=deleteCalendarEvent → studio boeking uit agenda
  *
  * SETUP:
  * 1. Deploy als Web App (Uitvoeren als: Ik, Toegang: Iedereen)
